@@ -71,6 +71,10 @@ class VideoUtil:
         return frames
 
     @staticmethod
+    def WriteFrame(steam, frame):
+        steam.write(frame)
+
+    @staticmethod
     def GetFps(videoStream):
         '''
         获得视频流的FPS
@@ -334,7 +338,7 @@ class Detector:
             else:
                 staticEdges &= edges  # 做与运算，不同点会被去掉
             if outputEdgesFilename is not None:
-                outputVideo.write(edges)  # 写入边缘识别结果
+                VideoUtil.WriteFrame(outputVideo, edges)  # 写入边缘识别结果
             frame_count -= 1
             VideoUtil.CloseVideos(videoInput, outputVideo)
         return staticEdges
@@ -363,7 +367,7 @@ class Detector:
             else:
                 staticEdges &= edges  # 做与运算，不同点会被去掉
             if outputEdgesFilename is not None:
-                outputVideo.write(edges)  # 写入边缘识别结果
+                VideoUtil.WriteFrame(outputVideo, edges)  # 写入边缘识别结果
             frame_count -= 1
         return staticEdges
 
