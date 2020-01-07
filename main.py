@@ -20,9 +20,9 @@ import os
 from Detector import Transformer
 from Detector import VideoUtil
 
-def detectLP(image):
+
+def detectLP(image: np.ndarray):
     image = cv2.resize(image, (0, 0), fx=args.scale, fy=args.scale, interpolation=cv2.INTER_CUBIC)
-    from MTCNN.MTCNN import create_mtcnn_net
     bboxes = create_mtcnn_net(image, args.mini_lp, device, p_model_path='MTCNN/weights/pnet_Weights',
                               o_model_path='MTCNN/weights/onet_Weights')
 
@@ -40,9 +40,7 @@ def detectLP(image):
         preds = lprnet(transfer)
         preds = preds.cpu().detach().numpy()  # (1, 68, 18)
         labels, pred_labels = decode(preds, CHARS)
-
         cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 1)
-        from LPRNet.LPRNet_Test import cv2ImgAddText
         image = cv2ImgAddText(image, labels[0], (x1, y1 - 12), textColor=(255, 255, 0), textSize=15)
 
     image = cv2.resize(image, (0, 0), fx=1 / args.scale, fy=1 / args.scale, interpolation=cv2.INTER_CUBIC)
@@ -54,6 +52,7 @@ def detectAndShow(image):
     cv2.imshow('image', image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+    return image
 
 
 if __name__ == '__main__':
@@ -64,7 +63,7 @@ if __name__ == '__main__':
     parser.add_argument('--mini_lp', dest='mini_lp', help="Minimum face to be detected", default=(50, 15), type=int)
     parser.add_argument('-folder', '--image_folder', default=None, type=str)
     parser.add_argument('-video', '--video', default=None, type=str)
-    # parser.add_argument('')
+    parser.add_argument('-time', '--time_limit', default=None, type=int)
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -89,10 +88,20 @@ if __name__ == '__main__':
                 # image = cv2.imread(os.path.join(root, name))
                 detectAndShow(image)
     elif args.video is not None:
-        steamI, steamO = VideoUtil.OpenVideos(args.video, args.video.replace('.mp4','.out.mp4'))
+        steamI = VideoUtil.OpenInputVideo(args.video)
+        steamO = VideoUtil.OpenOutputVideo(args.video.replace('.mp4', '.out.mp4'), steamI, 'mp4v')
         fps = VideoUtil.GetFps(steamI)
-        frames = VideoUtil.ReadFrames(steamI, fps)
-        for frame in frames:
+        eof = False
+        loopI = 0
+        while eof is False:
+            ret, frame = steamI.read()
+            if ret is False:
+                eof = True
             VideoUtil.WriteFrame(steamO, detectLP(frame))
-        VideoUtil.CloseVideos(steamI,steamO)
+            loopI += 1
+            if loopI % fps is 0:
+                print('已处理%d秒' % (loopI // fps))
+            if args.time_limit is not None and time.time() - since > args.time_limit:
+                break
+        VideoUtil.CloseVideos(steamI, steamO)
     print("model inference in {:2.3f} seconds".format(time.time() - since))
