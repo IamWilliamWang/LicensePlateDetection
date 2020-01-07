@@ -19,6 +19,7 @@ import cv2
 import os
 from Detector import Transformer
 from Detector import VideoUtil
+import traceback
 
 
 def detectLP(image: np.ndarray):
@@ -30,6 +31,7 @@ def detectLP(image: np.ndarray):
         for i in range(bboxes.shape[0]):
             bbox = bboxes[i, :4]
             x1, y1, x2, y2 = [int(bbox[j]) for j in range(4)]
+            x1 = 0 if x1 < 0 else x1
             w = int(x2 - x1 + 1.0)
             h = int(y2 - y1 + 1.0)
             img_box = np.zeros((h, w, 3))
@@ -46,16 +48,16 @@ def detectLP(image: np.ndarray):
 
         image = cv2.resize(image, (0, 0), fx=1 / args.scale, fy=1 / args.scale, interpolation=cv2.INTER_CUBIC)
         return image
-    except:
-        print('发生错误！')
+    except Exception as e:
+        traceback.print_exc()
         return image
 
 
 def detectAndShow(image):
     image = detectLP(image)
     cv2.imshow('image', image)
-    cv2.waitKey(0)
-    #cv2.destroyAllWindows()
+    cv2.waitKey(args.wait_time)
+    # cv2.destroyAllWindows()
     return image
 
 
@@ -65,9 +67,11 @@ if __name__ == '__main__':
     parser.add_argument('-image', '--image', help='image path', default='test/8.jpg', type=str)
     parser.add_argument('--scale', dest='scale', help="scale the iamge", default=1, type=int)
     parser.add_argument('--mini_lp', dest='mini_lp', help="Minimum face to be detected", default=(50, 15), type=int)
-    parser.add_argument('-folder', '--image_folder', default=None, type=str)
-    parser.add_argument('-video', '--video', default=None, type=str)
-    parser.add_argument('-time', '--time_limit', default=None, type=int)
+    parser.add_argument('-folder', '--image_folder', help='存放图片的文件夹名', default=None, type=str)
+    parser.add_argument('-video', '--video', help='录像文件名', default=None, type=str)
+    parser.add_argument('-time', '--time_limit', help='执行时间不超过多少秒', default=None, type=int)
+    parser.add_argument('-output', '--output_video', help='是否输出处理后的视频，True或False', default='False', type=str)
+    parser.add_argument('-wait', '--wait_time', help='显示窗口暂停时长', default=0, type=int)
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -93,7 +97,9 @@ if __name__ == '__main__':
                 detectAndShow(image)
     elif args.video is not None:
         steamI = VideoUtil.OpenInputVideo(args.video)
-        steamO = VideoUtil.OpenOutputVideo(args.video.replace('.mp4', '.out.mp4'), steamI, 'mp4v')
+        steamO = None
+        if args.output_video is 'True':
+            steamO = VideoUtil.OpenOutputVideo(args.video.replace('.mp4', '.out.mp4'), steamI, 'mp4v')
         fps = VideoUtil.GetFps(steamI)
         eof = False
         loopI = 0
@@ -103,7 +109,10 @@ if __name__ == '__main__':
                 eof = True
             loopI += 1
             if loopI % fps is 0:
-                VideoUtil.WriteFrame(steamO, detectAndShow(frame))
+                if args.output_video is 'True':
+                    VideoUtil.WriteFrame(steamO, detectAndShow(frame))
+                else:
+                    detectAndShow(frame)
                 print('已处理%d秒' % (loopI // fps))
             if args.time_limit is not None and time.time() - since > args.time_limit:
                 break
