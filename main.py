@@ -26,32 +26,36 @@ def detectLP(image: np.ndarray):
     bboxes = create_mtcnn_net(image, args.mini_lp, device, p_model_path='MTCNN/weights/pnet_Weights',
                               o_model_path='MTCNN/weights/onet_Weights')
 
-    for i in range(bboxes.shape[0]):
-        bbox = bboxes[i, :4]
-        x1, y1, x2, y2 = [int(bbox[j]) for j in range(4)]
-        w = int(x2 - x1 + 1.0)
-        h = int(y2 - y1 + 1.0)
-        img_box = np.zeros((h, w, 3))
-        img_box = image[y1:y2 + 1, x1:x2 + 1, :]
-        im = cv2.resize(img_box, (94, 24), interpolation=cv2.INTER_CUBIC)
-        im = (np.transpose(np.float32(im), (2, 0, 1)) - 127.5) * 0.0078125
-        data = torch.from_numpy(im).float().unsqueeze(0).to(device)  # torch.Size([1, 3, 24, 94])
-        transfer = STN(data)
-        preds = lprnet(transfer)
-        preds = preds.cpu().detach().numpy()  # (1, 68, 18)
-        labels, pred_labels = decode(preds, CHARS)
-        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 1)
-        image = cv2ImgAddText(image, labels[0], (x1, y1 - 12), textColor=(255, 255, 0), textSize=15)
+    try:
+        for i in range(bboxes.shape[0]):
+            bbox = bboxes[i, :4]
+            x1, y1, x2, y2 = [int(bbox[j]) for j in range(4)]
+            w = int(x2 - x1 + 1.0)
+            h = int(y2 - y1 + 1.0)
+            img_box = np.zeros((h, w, 3))
+            img_box = image[y1:y2 + 1, x1:x2 + 1, :]
+            im = cv2.resize(img_box, (94, 24), interpolation=cv2.INTER_CUBIC)
+            im = (np.transpose(np.float32(im), (2, 0, 1)) - 127.5) * 0.0078125
+            data = torch.from_numpy(im).float().unsqueeze(0).to(device)  # torch.Size([1, 3, 24, 94])
+            transfer = STN(data)
+            preds = lprnet(transfer)
+            preds = preds.cpu().detach().numpy()  # (1, 68, 18)
+            labels, pred_labels = decode(preds, CHARS)
+            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 1)
+            image = cv2ImgAddText(image, labels[0], (x1, y1 - 12), textColor=(255, 255, 0), textSize=15)
 
-    image = cv2.resize(image, (0, 0), fx=1 / args.scale, fy=1 / args.scale, interpolation=cv2.INTER_CUBIC)
-    return image
+        image = cv2.resize(image, (0, 0), fx=1 / args.scale, fy=1 / args.scale, interpolation=cv2.INTER_CUBIC)
+        return image
+    except:
+        print('发生错误！')
+        return image
 
 
 def detectAndShow(image):
     image = detectLP(image)
     cv2.imshow('image', image)
     cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    #cv2.destroyAllWindows()
     return image
 
 
@@ -97,9 +101,9 @@ if __name__ == '__main__':
             ret, frame = steamI.read()
             if ret is False:
                 eof = True
-            VideoUtil.WriteFrame(steamO, detectLP(frame))
             loopI += 1
             if loopI % fps is 0:
+                VideoUtil.WriteFrame(steamO, detectAndShow(frame))
                 print('已处理%d秒' % (loopI // fps))
             if args.time_limit is not None and time.time() - since > args.time_limit:
                 break
