@@ -21,7 +21,7 @@ ads = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q'
 
 
 parser = argparse.ArgumentParser(description='crop the licence plate from original image')
-parser.add_argument("-image", help='image path', default='../ccpd/ccpd_dataset/ccpd_base', type=str)
+parser.add_argument("-image", help='image path', default=r"C:\Users\william\Desktop\CCPD2019\ccpd_base", type=str)
 parser.add_argument("-dir_train", help='save directory', default='train', type=str)
 parser.add_argument("-dir_val", help='save directory', default='validation', type=str)
 args = parser.parse_args()
@@ -69,12 +69,14 @@ for i in range(len(img_paths)):
         print("%d images done" % idx)
     
     if idx % 4 == 0:
-        save = save_dir_val+'/'+lb+suffix      
-        cv2.imwrite(save, img_crop)
+        save = save_dir_val+'/'+lb+suffix
+        cv2.imencode(".jpg", img_crop)[1].tofile(save)
+        # cv2.imwrite(save, img_crop)
         idx_val += 1
     else:
-        save = save_dir_train+'/'+lb+suffix      
-        cv2.imwrite(save, img_crop)
+        save = save_dir_train+'/'+lb+suffix
+        cv2.imencode(".jpg", img_crop)[1].tofile(save)
+        # cv2.imwrite(save, img_crop)
         idx_train += 1
         
 print('image data processing done, write %d training images, %d val images' % (idx_train, idx_val))

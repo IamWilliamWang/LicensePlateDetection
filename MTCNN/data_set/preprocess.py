@@ -14,7 +14,7 @@ import argparse
 import random
 
 parser = argparse.ArgumentParser(description='crop the licence plate from original image')
-parser.add_argument("-image", help='image path', default='../../ccpd/ccpd_dataset/ccpd_weather', type=str)
+parser.add_argument("-image", help='image path', default=r'C:\Users\william\Desktop\CCPD2019\ccpd_weather', type=str)
 parser.add_argument("-dir_train", help='save directory', default='ccpd_train', type=str)
 parser.add_argument("-dir_val", help='save directory', default='ccpd_val', type=str)
 parser.add_argument("-size", help='the number of images to be saved', default=5000, type=int)

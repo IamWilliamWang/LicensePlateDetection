@@ -31,7 +31,9 @@ def detectLP(image: np.ndarray):
         for i in range(bboxes.shape[0]):
             bbox = bboxes[i, :4]
             x1, y1, x2, y2 = [int(bbox[j]) for j in range(4)]
+            # 车牌在边缘的时候，处理方框
             x1 = 0 if x1 < 0 else x1
+            y1 = 0 if y1 < 0 else y1
             w = int(x2 - x1 + 1.0)
             h = int(y2 - y1 + 1.0)
             img_box = np.zeros((h, w, 3))
@@ -70,7 +72,7 @@ if __name__ == '__main__':
     parser.add_argument('-folder', '--image_folder', help='存放图片的文件夹名', default=None, type=str)
     parser.add_argument('-video', '--video', help='录像文件名', default=None, type=str)
     parser.add_argument('-time', '--time_limit', help='执行时间不超过多少秒', default=None, type=int)
-    parser.add_argument('-output', '--output_video', help='是否输出处理后的视频，True或False', default='False', type=str)
+    parser.add_argument('-output', '--output_video', help='是否输出处理后的视频（True或False）', default='False', type=str)
     parser.add_argument('-wait', '--wait_time', help='显示窗口暂停时长', default=0, type=int)
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

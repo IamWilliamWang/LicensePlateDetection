@@ -71,8 +71,12 @@ class VideoUtil:
         return frames
 
     @staticmethod
-    def WriteFrame(steam, frame):
-        steam.write(frame)
+    def ReadFrame(stream):
+        return numpy.asarray(VideoUtil.ReadFrames(stream, 1)[0])
+
+    @staticmethod
+    def WriteFrame(stream, frame):
+        stream.write(frame)
 
     @staticmethod
     def GetFps(videoStream):
@@ -108,8 +112,8 @@ class VideoUtil:
         :param videoStreams: 所有视频的文件流
         :return:
         '''
-        for videoSteam in videoStreams:
-            videoSteam.release()
+        for videoStream in videoStreams:
+            videoStream.release()
 
 
 class Transformer:
@@ -119,13 +123,18 @@ class Transformer:
     '''
 
     @staticmethod
-    def Imread(filename_unicode):
+    def Imread(filename_unicode: str):
         '''
         读取含有unicode文件名的图片
         :param filename_unicode: 含有unicode的图片名
         :return:
         '''
         return cv2.imdecode(numpy.fromfile(filename_unicode, dtype=numpy.uint8), -1)
+
+    @staticmethod
+    def Imwrite(filename_unicode: str, frame):
+        extension = filename_unicode[filename_unicode.rfind('.'):]
+        cv2.imencode(extension, frame)[1].tofile(filename_unicode)
 
     @staticmethod
     def IsGrayImage(grayOrImg):
@@ -343,7 +352,7 @@ class Detector:
             VideoUtil.CloseVideos(videoInput, outputVideo)
         return staticEdges
 
-    def GetNoChangeEdges_fromSteam(self, inputStream, frame_count=20, outputEdgesFilename=None):
+    def GetNoChangeEdges_fromStream(self, inputStream, frame_count=20, outputEdgesFilename=None):
         '''
         从输入流中提取不动物体的Edges帧
         :param inputStream: 输入文件流
@@ -453,7 +462,7 @@ class Detector:
         # 初始化输入流
         # 获得静态Edges的Lines信息
         inputStream = VideoUtil.OpenInputVideo(source)
-        staticEdges = self.GetNoChangeEdges_fromSteam(inputStream, 20)
+        staticEdges = self.GetNoChangeEdges_fromStream(inputStream, 20)
         staticLines = Transformer.GetLinesFromEdges(staticEdges)
         # 启动Socket，用于发送每帧
         SEND_FRAMES = False
@@ -467,7 +476,7 @@ class Detector:
         # 启动检测
         while inputStream.isOpened():
             # Capture frame-by-frame
-            edges = self.GetNoChangeEdges_fromSteam(inputStream, 20)
+            edges = self.GetNoChangeEdges_fromStream(inputStream, 20)
             lines = Transformer.GetLinesFromEdges(edges, threshold=50)
             if lines is None:
                 break
