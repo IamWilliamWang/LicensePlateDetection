@@ -20,20 +20,25 @@ from tkinter import IntVar, StringVar
 from Detector import VideoUtil
 from Detector import Transformer
 import math
+import random
 
 lastDraw = None
+if len(os.listdir('dataset/')) is not 0:
+    jpgs = os.listdir('dataset/')
+    jpgs.sort()
+    savedIndex = int(jpgs[-1].split('.')[0]) + 1
+else:
+    savedIndex = 1
 
 
 class GUI:
+
     def __init__(self, videoStream):
         self.videoStream = videoStream
         self.root = tkinter.Tk()  # my创建主窗口
-        # self.img = Image.open(r"C:\Users\william\ITCP Web\ScenePics\正常\20200109\20200109091040849.jpg")
-        # self.img = ImageTk.PhotoImage(self.img)
-        self.frame = VideoUtil.ReadFrame(self.videoStream)
-        frameCov = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
-        image = Image.fromarray(frameCov)
-        self.tkImg = ImageTk.PhotoImage(image)
+        self.root.state("zoomed")
+        self.tkImg = ImageTk.PhotoImage(
+            Image.fromarray(cv2.cvtColor(VideoUtil.ReadFrame(self.videoStream), cv2.COLOR_BGR2RGB)))
         # canvas尺寸
         screenWidth = self.tkImg.width()  # root.winfo_screenwidth()
         screenHeight = self.tkImg.height()  # root.winfo_screenheight()
@@ -42,16 +47,46 @@ class GUI:
         self.canvas.create_image(0, 0, anchor='nw', image=self.tkImg)
         self.root.title('DatasetMaker')
         self.root.geometry(str(self.tkImg.width()) + 'x' + str(self.tkImg.height()))
-        self.canvas.bind('<Button-1>', self.onLeftButtonDown)  # my，鼠标与事件绑定
-        self.canvas.bind('<B1-Motion>', self.onLeftButtonMove)
-        self.canvas.bind('<ButtonRelease-1>', self.onLeftButtonUp)
+        self.canvas.bind('<Button-1>', self.onLeftButtonDown)  # 鼠标左键
+        self.canvas.bind('<B1-Motion>', self.onLeftButtonMove)  # 鼠标拖动
+        self.canvas.bind('<ButtonRelease-1>', self.onLeftButtonUp)  # 鼠标抬起
+        self.root.bind('<Return>', self.enter_Press)  # enter键
+        self.root.bind('<Key>', self.key_Press)  # 数字键
+        self.root.bind('<space>', self.space_Press)  # 空格键
         self.canvas.place(x=0, y=0)  # pack(fill=tkinter.Y,expand=tkinter.YES)
         # self.root.resizable(False, False)
         self.X = tkinter.IntVar(value=0)
         self.Y = tkinter.IntVar(value=0)
         self.selectPosition = None
+        self.单张图片含有的车牌数 = 1
         # 启动消息主循环
         self.root.mainloop()
+
+    def next(self, skippedSeconds=None):
+        if skippedSeconds is None:
+            skippedSeconds = VideoUtil.GetFps(self.videoStream)
+        else:
+            skippedSeconds *= VideoUtil.GetFps(self.videoStream)
+        for i in range(skippedSeconds):
+            # self.img = Image.open(r"C:\Users\william\ITCP Web\ScenePics\正常\20200109\20200109091040849.jpg")
+            # self.img = ImageTk.PhotoImage(self.img)
+            self.frame = VideoUtil.ReadFrame(self.videoStream)
+        frameCov = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+        image = Image.fromarray(frameCov)
+        self.tkImg = ImageTk.PhotoImage(image)
+        self.canvas.create_image(0, 0, anchor='nw', image=self.tkImg)
+
+    def key_Press(self, event):
+        if '1' <= event.char <= '9':
+            self.next(int(event.char))
+        elif event.char is '0':
+            self.next(10)
+
+    def enter_Press(self, event):
+        self.next(30)
+
+    def space_Press(self, event):
+        self.单张图片含有的车牌数 += 1
 
     # 鼠标左键按下的位置
     def onLeftButtonDown(self, event):
@@ -79,8 +114,8 @@ class GUI:
             self.canvas.delete(lastDraw)
         except Exception as e:
             pass
-        sleep(0.1)
-        print(event.x, event.y)
+        # sleep(0.1)
+        # print(event.x, event.y)
         upx = event.x
         upy = event.y
         upx = upx
@@ -100,9 +135,18 @@ class GUI:
                                      self.selectPosition[3], outline="red")
         w = self.selectPosition[1] - self.selectPosition[0]
         h = self.selectPosition[3] - self.selectPosition[2]
-        clipImg = self.img[mytop:mybottom][myleft:myright]
-        Transformer.Imwrite('1.jpg', clipImg)
+        clipFrame = self.frame[mytop:mybottom, myleft:myright]
+        global savedIndex
+        savedFile = 'dataset/' + str(savedIndex) + '.jpg'
+        Transformer.Imwrite(savedFile, clipFrame)
+        savedIndex += 1
+        print(savedFile, '已保存')
+        if self.单张图片含有的车牌数 is 1:
+            self.next()
+        else:
+            self.单张图片含有的车牌数 -= 1
 
 
-streamI = VideoUtil.OpenInputVideo(r"E:\项目\车牌检测\所有录像\Record20200106-0921.mp4")
-GUI(streamI)
+video = input('输入视频文件名：')
+video = video.replace('\"', '')
+GUI(VideoUtil.OpenInputVideo(video))
