@@ -1,26 +1,11 @@
-import os.path
 import cv2
-import shutil
-
-import numpy
-from moviepy.editor import *
-import argparse
 import os
-import sys
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-import subprocess
-import time
 
 import tkinter
 import tkinter.messagebox
-from PIL import Image, ImageTk, ImageDraw, ImageFont
-from time import sleep
-from tkinter import IntVar, StringVar
+from PIL import Image, ImageTk
 from Detector import VideoUtil
 from Detector import Transformer
-import math
-import random
 
 lastDraw = None
 if len(os.listdir('dataset/')) is not 0:
@@ -35,7 +20,7 @@ class GUI:
 
     def __init__(self, videoStream):
         self.videoStream = videoStream
-        self.root = tkinter.Tk()  # my创建主窗口
+        self.root = tkinter.Tk()  # 创建主窗口
         self.root.state("zoomed")
         self.tkImg = ImageTk.PhotoImage(
             Image.fromarray(cv2.cvtColor(VideoUtil.ReadFrame(self.videoStream), cv2.COLOR_BGR2RGB)))
@@ -47,9 +32,9 @@ class GUI:
         self.canvas.create_image(0, 0, anchor='nw', image=self.tkImg)
         self.root.title('DatasetMaker')
         self.root.geometry(str(self.tkImg.width()) + 'x' + str(self.tkImg.height()))
-        self.canvas.bind('<Button-1>', self.onLeftButtonDown)  # 鼠标左键
-        self.canvas.bind('<B1-Motion>', self.onLeftButtonMove)  # 鼠标拖动
-        self.canvas.bind('<ButtonRelease-1>', self.onLeftButtonUp)  # 鼠标抬起
+        self.canvas.bind('<Button-1>', self.leftMouse_Down)  # 鼠标左键
+        self.canvas.bind('<B1-Motion>', self.mouse_Drag)  # 鼠标拖动
+        self.canvas.bind('<ButtonRelease-1>', self.leftMouse_Up)  # 鼠标抬起
         self.root.bind('<Return>', self.enter_Press)  # enter键
         self.root.bind('<Key>', self.key_Press)  # 数字键
         self.root.bind('<space>', self.space_Press)  # 空格键
@@ -58,11 +43,19 @@ class GUI:
         self.X = tkinter.IntVar(value=0)
         self.Y = tkinter.IntVar(value=0)
         self.selectPosition = None
-        self.单张图片含有的车牌数 = 1
+        self.LPCountInPicture = 1
         # 启动消息主循环
         self.root.mainloop()
 
     def next(self, skippedSeconds=None):
+        '''
+        加载并显示视频后几秒的图像
+        Args:
+            skippedSeconds: 加载几秒后的图像
+
+        Returns:
+
+        '''
         if skippedSeconds is None:
             skippedSeconds = VideoUtil.GetFps(self.videoStream)
         else:
@@ -86,17 +79,17 @@ class GUI:
         self.next(30)
 
     def space_Press(self, event):
-        self.单张图片含有的车牌数 += 1
+        self.LPCountInPicture += 1
 
     # 鼠标左键按下的位置
-    def onLeftButtonDown(self, event):
+    def leftMouse_Down(self, event):
         self.X.set(event.x)
         self.Y.set(event.y)
         # 开始画框的标志
         self.sel = True
 
     # 鼠标左键移动，显示选取的区域
-    def onLeftButtonMove(self, event):
+    def mouse_Drag(self, event):
         if not self.sel:
             return
         global lastDraw
@@ -108,14 +101,12 @@ class GUI:
         lastDraw = self.canvas.create_rectangle(self.X.get(), self.Y.get(), event.x, event.y, outline='yellow')
 
     # 获取鼠标左键抬起的位置，记录区域
-    def onLeftButtonUp(self, event):
+    def leftMouse_Up(self, event):
         self.sel = False
         try:
             self.canvas.delete(lastDraw)
         except Exception as e:
             pass
-        # sleep(0.1)
-        # print(event.x, event.y)
         upx = event.x
         upy = event.y
         upx = upx
@@ -126,27 +117,27 @@ class GUI:
         print("选择区域：xmin:" + str(self.selectPosition[0]) + ' ymin:' + str(
             self.selectPosition[2]) + ' xmax:' + str(self.selectPosition[1]) + ' ymax:' + str(
             self.selectPosition[3]))  # my，对应image中坐标信息
-        self.but_addCaptureClick()
+        self.cutPictureAndShow()
 
-    def but_addCaptureClick(self):
+    def cutPictureAndShow(self):
         myleft, myright, mytop, mybottom = [x for x in self.selectPosition]
         # 新添加Label控件和Entry控件以及Button，接收在canvas中点出的框坐标
-        self.canvas.create_rectangle(self.selectPosition[0], self.selectPosition[2], self.selectPosition[1],
-                                     self.selectPosition[3], outline="red")
-        w = self.selectPosition[1] - self.selectPosition[0]
-        h = self.selectPosition[3] - self.selectPosition[2]
+        self.canvas.create_rectangle(myleft, mytop, myright, mybottom, outline="red")
+        w = myright - myleft
+        h = mybottom - mytop
         clipFrame = self.frame[mytop:mybottom, myleft:myright]
         global savedIndex
         savedFile = 'dataset/' + str(savedIndex) + '.jpg'
         Transformer.Imwrite(savedFile, clipFrame)
         savedIndex += 1
         print(savedFile, '已保存')
-        if self.单张图片含有的车牌数 is 1:
+        if self.LPCountInPicture is 1:
             self.next()
         else:
-            self.单张图片含有的车牌数 -= 1
+            self.LPCountInPicture -= 1
 
 
-video = input('输入视频文件名：')
-video = video.replace('\"', '')
-GUI(VideoUtil.OpenInputVideo(video))
+if __name__ == '__main__':
+    video = input('输入视频文件名：')
+    video = video.replace('\"', '')
+    GUI(VideoUtil.OpenInputVideo(video))
