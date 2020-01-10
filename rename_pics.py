@@ -7,6 +7,8 @@ xlsx_file = r"C:\Users\william\Desktop\抓拍.xlsx"
 # 获取数据
 data = xlrd.open_workbook(xlsx_file)
 log = open('log.txt', mode='a', encoding='utf-8')
+# 是否将log内容变为redo语句
+log_redo_bat = True
 # 获取sheet 此处有图注释（见图1）
 for table in data.sheets():
     # 获取总行数
@@ -38,5 +40,8 @@ for table in data.sheets():
                 os.rename(filename, new_filename)
             finally:
                 print('Renamed', filename, 'to', new_filename)
-                log.write('Renamed ' + filename + ' to ' + new_filename + '\n')
+                if log_redo_bat:
+                    log.write('rename \"' + new_filename + '\" \"' + filename[filename.rfind('\\') + 1:] + '\"\n')
+                else:
+                    log.write('Renamed ' + filename + ' to ' + new_filename + '\n')
 log.close()
