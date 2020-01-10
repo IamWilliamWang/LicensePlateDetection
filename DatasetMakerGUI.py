@@ -6,10 +6,17 @@ import tkinter.messagebox
 from PIL import Image, ImageTk
 from Detector import VideoUtil
 from Detector import Transformer
+import argparse
 
 lastDraw = None
-if len(os.listdir('dataset/')) is not 0:
-    jpgs = os.listdir('dataset/')
+parser = argparse.ArgumentParser(description='数据集图像裁剪器')
+parser.add_argument('--save_dir', type=str, help='截取后保存的文件夹', default='dataset/')
+parser.add_argument('-video', '--video', type=str, help='视频文件名', default=None)
+parser.add_argument('-imgdir', '--image_dir', type=str, help='存放照片的文件夹', default=None)
+parser.add_argument('-image', '--image', type=str, help='单个图片文件名', default=None)
+args = parser.parse_args()
+if len(os.listdir(args.save_dir)) is not 0:
+    jpgs = os.listdir(args.save_dir)
     jpgs.sort()
     savedIndex = int(jpgs[-1].split('.')[0]) + 1
 else:
@@ -22,8 +29,7 @@ class GUI:
         self.videoStream = videoStream
         self.root = tkinter.Tk()  # 创建主窗口
         self.root.state("zoomed")
-        self.tkImg = ImageTk.PhotoImage(
-            Image.fromarray(cv2.cvtColor(VideoUtil.ReadFrame(self.videoStream), cv2.COLOR_BGR2RGB)))
+        self.tkImg = self.readImage()
         # canvas尺寸
         screenWidth = self.tkImg.width()  # root.winfo_screenwidth()
         screenHeight = self.tkImg.height()  # root.winfo_screenheight()
@@ -46,6 +52,23 @@ class GUI:
         self.LPCountInPicture = 1
         # 启动消息主循环
         self.root.mainloop()
+
+    def videoMode(self):
+        return self.videoStream is not None
+
+    def imageMode(self):
+        return args.image is not None
+
+    def imagedirMode(self):
+        return args.image_dir is not None
+
+    def readImage(self):
+        if self.videoMode():
+            return ImageTk.PhotoImage(
+                Image.fromarray(cv2.cvtColor(VideoUtil.ReadFrame(self.videoStream), cv2.COLOR_BGR2RGB)))
+        elif self.imageMode():
+            self.frame = Transformer.Imread(args.image)
+            return ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)))
 
     def next(self, skippedSeconds=None):
         '''
@@ -127,17 +150,21 @@ class GUI:
         h = mybottom - mytop
         clipFrame = self.frame[mytop:mybottom, myleft:myright]
         global savedIndex
-        savedFile = 'dataset/' + str(savedIndex) + '.jpg'
+        savedFile = args.save_dir + str(savedIndex) + '.jpg'
         Transformer.Imwrite(savedFile, clipFrame)
         savedIndex += 1
         print(savedFile, '已保存')
+        if self.imageMode():
+            return
         if self.LPCountInPicture is 1:
             self.next()
         else:
             self.LPCountInPicture -= 1
 
 
-if __name__ == '__main__':
-    video = input('输入视频文件名：')
+if args.video is not None:
+    video = args.video
     video = video.replace('\"', '')
     GUI(VideoUtil.OpenInputVideo(video))
+elif args.image is not None:
+    GUI(None)
