@@ -18,10 +18,13 @@ args = parser.parse_args()
 if len(os.listdir(args.save_dir)) is not 0:
     savedjpgs = os.listdir(args.save_dir)
     savedjpgs.sort()
-    savedIndex = int(savedjpgs[-1].split('.')[0]) + 1
+    try:
+        savedIndex = int(savedjpgs[-1].split('.')[0]) + 1
+    except ValueError as e:
+        savedIndex = 1
 else:
     savedIndex = 1
-imageFiles: list = []
+imageFiles = None
 imageFilesIndex: int = 0
 
 
@@ -93,14 +96,23 @@ class GUI:
         Returns:
 
         '''
-        if skippedSeconds is None:
-            skippedSeconds = VideoUtil.GetFps(self.videoStream) if self.videoMode() else 1
+        # if skippedSeconds is None:
+        #     skippedSeconds = VideoUtil.GetFps(self.videoStream) if self.videoMode() else 1
+        # else:
+        #     skippedSeconds *= VideoUtil.GetFps(self.videoStream) if self.videoMode() else 1
+        skippedSeconds = skippedSeconds if skippedSeconds is not None else 1
+        if self.videoMode():
+            self.videoStream.set(cv2.CAP_PROP_POS_FRAMES,
+                                 self.videoStream.get(cv2.CAP_PROP_POS_FRAMES) + VideoUtil.GetFps(
+                                     self.videoStream) * skippedSeconds)
+            self.frame = self.readFrame()
         else:
-            skippedSeconds *= VideoUtil.GetFps(self.videoStream) if self.videoMode() else 1
-        for i in range(skippedSeconds):
+            global imageFilesIndex
+            imageFilesIndex += skippedSeconds - 1
             # self.img = Image.open(r"C:\Users\william\ITCP Web\ScenePics\正常\20200109\20200109091040849.jpg")
             # self.img = ImageTk.PhotoImage(self.img)
             self.frame = self.readFrame()
+
         self.tkImg = self.frame2TkImage(self.frame)
         self.canvas.create_image(0, 0, anchor='nw', image=self.tkImg)
 
