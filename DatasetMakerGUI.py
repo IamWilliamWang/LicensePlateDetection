@@ -16,11 +16,13 @@ parser.add_argument('-imgdir', '--image_dir', type=str, help='存放照片的文
 parser.add_argument('-image', '--image', type=str, help='单个图片文件名', default=None)
 args = parser.parse_args()
 if len(os.listdir(args.save_dir)) is not 0:
-    jpgs = os.listdir(args.save_dir)
-    jpgs.sort()
-    savedIndex = int(jpgs[-1].split('.')[0]) + 1
+    savedjpgs = os.listdir(args.save_dir)
+    savedjpgs.sort()
+    savedIndex = int(savedjpgs[-1].split('.')[0]) + 1
 else:
     savedIndex = 1
+imageFiles: list = []
+imageFilesIndex: int = 0
 
 
 class GUI:
@@ -29,7 +31,7 @@ class GUI:
         self.videoStream = videoStream
         self.root = tkinter.Tk()  # 创建主窗口
         self.root.state("zoomed")
-        self.tkImg = self.readImage()
+        self.tkImg = self.frame2TkImage(self.readFrame())
         # canvas尺寸
         screenWidth = self.tkImg.width()  # root.winfo_screenwidth()
         screenHeight = self.tkImg.height()  # root.winfo_screenheight()
@@ -53,6 +55,9 @@ class GUI:
         # 启动消息主循环
         self.root.mainloop()
 
+    def frame2TkImage(self, frame):
+        return ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+
     def videoMode(self):
         return self.videoStream is not None
 
@@ -62,15 +67,24 @@ class GUI:
     def imagedirMode(self):
         return args.image_dir is not None
 
-    def readImage(self):
+    def readFrame(self):
         if self.videoMode():
-            return ImageTk.PhotoImage(
-                Image.fromarray(cv2.cvtColor(VideoUtil.ReadFrame(self.videoStream), cv2.COLOR_BGR2RGB)))
+            self.frame = VideoUtil.ReadFrame(self.videoStream)
+            return self.frame
         elif self.imageMode():
             self.frame = Transformer.Imread(args.image)
-            return ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)))
+            return self.frame
+        elif self.imagedirMode():
+            global imageFiles, imageFilesIndex
+            if imageFiles is None:
+                imageFiles = os.listdir(args.image_dir)
+                imageFiles = [os.path.join(args.image_dir, filename) for filename in imageFiles]
+            # return Transformer.Imread(str(param))
+            self.frame = Transformer.Imread(imageFiles[imageFilesIndex % len(imageFiles)])
+            imageFilesIndex += 1
+            return self.frame
 
-    def next(self, skippedSeconds=None):
+    def showNextFrame(self, skippedSeconds=None):
         '''
         加载并显示视频后几秒的图像
         Args:
@@ -80,26 +94,24 @@ class GUI:
 
         '''
         if skippedSeconds is None:
-            skippedSeconds = VideoUtil.GetFps(self.videoStream)
+            skippedSeconds = VideoUtil.GetFps(self.videoStream) if self.videoMode() else 1
         else:
-            skippedSeconds *= VideoUtil.GetFps(self.videoStream)
+            skippedSeconds *= VideoUtil.GetFps(self.videoStream) if self.videoMode() else 1
         for i in range(skippedSeconds):
             # self.img = Image.open(r"C:\Users\william\ITCP Web\ScenePics\正常\20200109\20200109091040849.jpg")
             # self.img = ImageTk.PhotoImage(self.img)
-            self.frame = VideoUtil.ReadFrame(self.videoStream)
-        frameCov = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
-        image = Image.fromarray(frameCov)
-        self.tkImg = ImageTk.PhotoImage(image)
+            self.frame = self.readFrame()
+        self.tkImg = self.frame2TkImage(self.frame)
         self.canvas.create_image(0, 0, anchor='nw', image=self.tkImg)
 
     def key_Press(self, event):
         if '1' <= event.char <= '9':
-            self.next(int(event.char))
+            self.showNextFrame(int(event.char))
         elif event.char is '0':
-            self.next(10)
+            self.showNextFrame(10)
 
     def enter_Press(self, event):
-        self.next(30)
+        self.showNextFrame(30)
 
     def space_Press(self, event):
         self.LPCountInPicture += 1
@@ -157,7 +169,7 @@ class GUI:
         if self.imageMode():
             return
         if self.LPCountInPicture is 1:
-            self.next()
+            self.showNextFrame()
         else:
             self.LPCountInPicture -= 1
 
@@ -167,4 +179,6 @@ if args.video is not None:
     video = video.replace('\"', '')
     GUI(VideoUtil.OpenInputVideo(video))
 elif args.image is not None:
+    GUI(None)
+elif args.image_dir is not None:
     GUI(None)
