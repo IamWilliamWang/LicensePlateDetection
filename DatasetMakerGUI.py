@@ -41,7 +41,7 @@ class GUI:
         self.canvas = tkinter.Canvas(self.root, bg='white', width=screenWidth, height=screenHeight)
         self.canvas.pack()
         self.canvas.create_image(0, 0, anchor='nw', image=self.tkImg)
-        self.root.title('DatasetMaker')
+        self.title()
         self.root.geometry(str(self.tkImg.width()) + 'x' + str(self.tkImg.height()))
         self.canvas.bind('<Button-1>', self.leftMouse_Down)  # 鼠标左键
         self.canvas.bind('<B1-Motion>', self.mouse_Drag)  # 鼠标拖动
@@ -102,19 +102,23 @@ class GUI:
         #     skippedSeconds *= VideoUtil.GetFps(self.videoStream) if self.videoMode() else 1
         skippedSeconds = skippedSeconds if skippedSeconds is not None else 1
         if self.videoMode():
-            self.videoStream.set(cv2.CAP_PROP_POS_FRAMES,
-                                 self.videoStream.get(cv2.CAP_PROP_POS_FRAMES) + VideoUtil.GetFps(
-                                     self.videoStream) * skippedSeconds)
+            VideoUtil.SkipReadFrames(self.videoStream, VideoUtil.GetFps(self.videoStream) * skippedSeconds)
             self.frame = self.readFrame()
         else:
             global imageFilesIndex
-            imageFilesIndex += skippedSeconds - 1
+            imageFilesIndex += skippedSeconds - 1  # 标记完索引已自动跳到下一张
             # self.img = Image.open(r"C:\Users\william\ITCP Web\ScenePics\正常\20200109\20200109091040849.jpg")
             # self.img = ImageTk.PhotoImage(self.img)
             self.frame = self.readFrame()
 
         self.tkImg = self.frame2TkImage(self.frame)
         self.canvas.create_image(0, 0, anchor='nw', image=self.tkImg)
+
+    def title(self, titleText=None):
+        if titleText is None:
+            self.root.title('DatasetMaker')
+        else:
+            self.root.title('DatasetMaker (' + titleText + ')')
 
     def key_Press(self, event):
         if '1' <= event.char <= '9':
@@ -178,6 +182,7 @@ class GUI:
         Transformer.Imwrite(savedFile, clipFrame)
         savedIndex += 1
         print(savedFile, '已保存')
+        self.title(savedFile + ' 已保存')
         if self.imageMode():
             return
         if self.LPCountInPicture is 1:
