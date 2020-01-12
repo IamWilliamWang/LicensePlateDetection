@@ -10,10 +10,10 @@ import argparse
 
 lastDraw = None
 parser = argparse.ArgumentParser(description='数据集图像裁剪器')
-parser.add_argument('--save_dir', type=str, help='截取后保存的文件夹', default='dataset/')
+parser.add_argument('--save_dir', type=str, help='截取后所保存的文件夹', default='dataset/')
 parser.add_argument('-video', '--video', type=str, help='视频文件名', default=None)
-parser.add_argument('-imgdir', '--image_dir', type=str, help='存放照片的文件夹', default=None)
-parser.add_argument('-image', '--image', type=str, help='单个图片文件名', default=None)
+parser.add_argument('-imgdir', '--image_dir', type=str, help='存放照片的文件夹名', default=None)
+parser.add_argument('-image', '--image', type=str, help='单个图片的文件名', default=None)
 args = parser.parse_args()
 if len(os.listdir(args.save_dir)) is not 0:
     savedjpgs = os.listdir(args.save_dir)
@@ -29,11 +29,22 @@ imageFilesIndex: int = 0
 
 
 class GUI:
-
+    """
+    对视频、图片进行批量裁剪的主窗体类。鼠标功能：拖动即可截取图片，拖动完毕切换到下一张。
+    键盘功能：
+    1：视频剪辑状态下，跳过一秒后读取一帧。图片裁剪状态下跳到下一张图片
+    2：视频剪辑状态下，跳过二秒后读取一帧。图片裁剪状态下跳到下两张图片
+    3-9同理。0代表10，Enter代表30
+    Space：同一张图片可多拖拽截取一次
+    -：逆向跳转，可读取之前的帧，偏移系数取反（默认情况偏移系数=1，只适用于视频模式）
+    a：增加偏移系数，每次跳过的秒数要乘偏移系数（只适用于视频模式）
+    d：减小偏移系数，每次跳过的秒数要乘偏移系数（只适用于视频模式）
+    """
     def __init__(self, videoStream):
         self.videoStream = videoStream
         self.root = tkinter.Tk()  # 创建主窗口
         self.root.state("zoomed")
+        self.staticText = None
         self.tkImg = self.frame2TkImage(self.readFrame())
         # canvas尺寸
         screenWidth = self.tkImg.width()  # root.winfo_screenwidth()
@@ -55,6 +66,7 @@ class GUI:
         self.Y = tkinter.IntVar(value=0)
         self.selectPosition = None
         self.LPCountInPicture = 1
+        self.偏移系数 = 1
         # 启动消息主循环
         self.root.mainloop()
 
@@ -102,7 +114,7 @@ class GUI:
         #     skippedSeconds *= VideoUtil.GetFps(self.videoStream) if self.videoMode() else 1
         skippedSeconds = skippedSeconds if skippedSeconds is not None else 1
         if self.videoMode():
-            VideoUtil.SkipReadFrames(self.videoStream, VideoUtil.GetFps(self.videoStream) * skippedSeconds)
+            VideoUtil.SkipReadFrames(self.videoStream, VideoUtil.GetFps(self.videoStream) * skippedSeconds * self.偏移系数)
             self.frame = self.readFrame()
         else:
             global imageFilesIndex
@@ -114,17 +126,31 @@ class GUI:
         self.tkImg = self.frame2TkImage(self.frame)
         self.canvas.create_image(0, 0, anchor='nw', image=self.tkImg)
 
-    def title(self, titleText=None):
-        if titleText is None:
-            self.root.title('DatasetMaker')
-        else:
-            self.root.title('DatasetMaker (' + titleText + ')')
+    def title(self, titleText=None, staticText=None):
+        if staticText is not None:
+            self.staticText = staticText
+        mTitle = 'DatasetMaker'
+        if self.staticText is not None:
+            mTitle += ' [' + self.staticText + ']'
+        if titleText is not None:
+            mTitle += ' (' + titleText + ')'
+        self.root.title(mTitle)
 
     def key_Press(self, event):
         if '1' <= event.char <= '9':
             self.showNextFrame(int(event.char))
         elif event.char is '0':
             self.showNextFrame(10)
+        elif self.videoMode():
+            if event.char is '-':
+                self.偏移系数 *= -1
+                self.title(staticText='倍率=' + str(self.偏移系数))
+            elif event.char is 'a':
+                self.偏移系数 *= 2
+                self.title(staticText='倍率=' + str(self.偏移系数))
+            elif event.char is 'd':
+                self.偏移系数 /= 2
+                self.title(staticText='倍率=' + str(self.偏移系数))
 
     def enter_Press(self, event):
         self.showNextFrame(30)

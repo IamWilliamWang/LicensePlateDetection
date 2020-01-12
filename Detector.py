@@ -75,7 +75,7 @@ class VideoUtil:
         return numpy.asarray(VideoUtil.ReadFrames(stream, 1)[0])
 
     @staticmethod
-    def SkipReadFrames(stream, skippedFramesCount):
+    def SkipReadFrames(stream, skippedFramesCount: int):
         stream.set(cv2.CAP_PROP_POS_FRAMES, stream.get(cv2.CAP_PROP_POS_FRAMES) + skippedFramesCount)
 
     @staticmethod
