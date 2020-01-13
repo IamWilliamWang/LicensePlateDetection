@@ -6,7 +6,7 @@ import os
 """
 if __name__ == '__main__':
     # 文件路径
-    xlsx_file = r"C:\Users\william\Desktop\抓拍.xlsx"
+    xlsx_file = r"D:\抓拍.xlsx"
     # 获取数据
     data = xlrd.open_workbook(xlsx_file)
     log = open('log.txt', mode='a', encoding='utf-8')

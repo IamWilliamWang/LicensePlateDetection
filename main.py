@@ -24,7 +24,15 @@ import traceback
 from DatasetMakerGUI import GUI
 
 
-def detectLP(image: np.ndarray):
+def detectLP(image: np.ndarray) -> np.ndarray:
+    """
+    检测车牌并在image上用方框和文字标出并返回
+    Args:
+        image: 原始图片
+
+    Returns: 标好的图片
+
+    """
     image = cv2.resize(image, (0, 0), fx=args.scale, fy=args.scale, interpolation=cv2.INTER_CUBIC)
     bboxes = create_mtcnn_net(image, args.mini_lp, device, p_model_path='MTCNN/weights/pnet_Weights',
                               o_model_path='MTCNN/weights/onet_Weights')
@@ -53,7 +61,7 @@ def detectLP(image: np.ndarray):
             while os.path.exists(savedFileName):
                 savedFileName = savedFileName.split('.')[0].split(' (')[0] + ' (' + str(postfix) + ')' + '.jpg'
                 postfix += 1
-            if postfix <= 5:  # 同一辆车超过10次就放弃保存
+            if postfix <= 10:  # 同一辆车超过10次就放弃保存
                 GUI.cutImwrite(savedFileName, image, x1, x2, y1, y2)
             # 图像显示阶段
             cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 1)
@@ -66,7 +74,7 @@ def detectLP(image: np.ndarray):
         return image
 
 
-def detectAndShow(image):
+def detectAndShow(image: np.ndarray) -> np.ndarray:
     image = detectLP(image)
     cv2.imshow('image', image)
     cv2.waitKey(args.wait_time)
@@ -75,7 +83,7 @@ def detectAndShow(image):
 
 
 if __name__ == '__main__':
-
+    # 解析参数
     parser = argparse.ArgumentParser(description='MTCNN & LPR Demo')
     parser.add_argument('-image', '--image', help='image path', default='test/8.jpg', type=str)
     parser.add_argument('--scale', dest='scale', help="scale the iamge", default=1, type=int)
@@ -87,20 +95,19 @@ if __name__ == '__main__':
     parser.add_argument('-output', '--output_video', help='是否输出处理后的视频（1或0）', default=0, type=int)
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    # 初始化LPRNet
     lprnet = LPRNet(class_num=len(CHARS), dropout_rate=0)
     lprnet.to(device)
     lprnet.load_state_dict(
         torch.load('LPRNet/weights/Final_LPRNet_model.pth', map_location=lambda storage, loc: storage))
     lprnet.eval()
-
+    # 初始化STNet
     STN = STNet()
     STN.to(device)
     STN.load_state_dict(torch.load('LPRNet/weights/Final_STN_model.pth', map_location=lambda storage, loc: storage))
     STN.eval()
-
     print("Successful to build LPR network!")
-
+    # 开始遍历，启动模型
     since = time.time()
     if args.image_folder is not None:
         for root, _, files in os.walk(args.image_folder):
@@ -128,7 +135,7 @@ if __name__ == '__main__':
             # print('已处理%d秒' % loopI)
             if args.time_limit is not None and time.time() - since > args.time_limit:
                 break
-            VideoUtil.SkipReadFrames(steamI, fps*0.2)  # 跳过一秒
+            VideoUtil.SkipReadFrames(steamI, fps * 0.2)  # 跳过一秒
         if args.output_video is 1:
             VideoUtil.CloseVideos(steamO)
         VideoUtil.CloseVideos(steamI)
