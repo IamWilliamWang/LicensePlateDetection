@@ -1,6 +1,6 @@
 import cv2
 import os
-
+import numpy as np
 import tkinter
 import tkinter.messagebox
 from PIL import Image, ImageTk
@@ -8,24 +8,25 @@ from Detector import VideoUtil
 from Detector import Transformer
 import argparse
 
-lastDraw = None
-parser = argparse.ArgumentParser(description='数据集图像裁剪器')
-parser.add_argument('--save_dir', type=str, help='截取后所保存的文件夹', default='dataset/')
-parser.add_argument('-video', '--video', type=str, help='视频文件名', default=None)
-parser.add_argument('-imgdir', '--image_dir', type=str, help='存放照片的文件夹名', default=None)
-parser.add_argument('-image', '--image', type=str, help='单个图片的文件名', default=None)
-args = parser.parse_args()
-if len(os.listdir(args.save_dir)) is not 0:
-    savedjpgs = os.listdir(args.save_dir)
-    savedjpgs.sort()
-    try:
-        savedIndex = int(savedjpgs[-1].split('.')[0]) + 1
-    except ValueError as e:
+if __name__ == '__main__':
+    lastDraw = None
+    parser = argparse.ArgumentParser(description='数据集图像裁剪器')
+    parser.add_argument('--save_dir', type=str, help='截取后所保存的文件夹', default='dataset/')
+    parser.add_argument('-video', '--video', type=str, help='视频文件名', default=None)
+    parser.add_argument('-imgdir', '--image_dir', type=str, help='存放照片的文件夹名', default=None)
+    parser.add_argument('-image', '--image', type=str, help='单个图片的文件名', default=None)
+    args = parser.parse_args()
+    if len(os.listdir(args.save_dir)) is not 0:
+        savedjpgs = os.listdir(args.save_dir)
+        savedjpgs.sort()
+        try:
+            savedIndex = int(savedjpgs[-1].split('.')[0]) + 1
+        except ValueError as e:
+            savedIndex = 1
+    else:
         savedIndex = 1
-else:
-    savedIndex = 1
-imageFiles = None
-imageFilesIndex: int = 0
+    imageFiles = None
+    imageFilesIndex: int = 0
 
 
 class GUI:
@@ -40,6 +41,7 @@ class GUI:
     a：增加偏移系数，每次跳过的秒数要乘偏移系数（只适用于视频模式）
     d：减小偏移系数，每次跳过的秒数要乘偏移系数（只适用于视频模式）
     """
+
     def __init__(self, videoStream):
         self.videoStream = videoStream
         self.root = tkinter.Tk()  # 创建主窗口
@@ -200,12 +202,9 @@ class GUI:
         myleft, myright, mytop, mybottom = [x for x in self.selectPosition]
         # 新添加Label控件和Entry控件以及Button，接收在canvas中点出的框坐标
         self.canvas.create_rectangle(myleft, mytop, myright, mybottom, outline="red")
-        w = myright - myleft
-        h = mybottom - mytop
-        clipFrame = self.frame[mytop:mybottom, myleft:myright]
         global savedIndex
         savedFile = args.save_dir + str(savedIndex) + '.jpg'
-        Transformer.Imwrite(savedFile, clipFrame)
+        GUI.cutImwrite(savedFile,self.frame,self.selectPosition)
         savedIndex += 1
         print(savedFile, '已保存')
         self.title(savedFile + ' 已保存')
@@ -216,12 +215,18 @@ class GUI:
         else:
             self.LPCountInPicture -= 1
 
+    @staticmethod
+    def cutImwrite(savedFileName:str, image: np.ndarray, *positions):
+        myleft, myright, mytop, mybottom = [x for x in positions]
+        clipFrame = image[mytop:mybottom, myleft:myright]
+        Transformer.Imwrite(savedFileName, clipFrame)
 
-if args.video is not None:
-    video = args.video
-    video = video.replace('\"', '')
-    GUI(VideoUtil.OpenInputVideo(video))
-elif args.image is not None:
-    GUI(None)
-elif args.image_dir is not None:
-    GUI(None)
+if __name__ == '__main__':
+    if args.video is not None:
+        video = args.video
+        video = video.replace('\"', '')
+        GUI(VideoUtil.OpenInputVideo(video))
+    elif args.image is not None:
+        GUI(None)
+    elif args.image_dir is not None:
+        GUI(None)

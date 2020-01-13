@@ -1,3 +1,6 @@
 .idea/
 *pycache*/
+*train*/
+*val*/
+MTCNN/data_preprocessing/anno_store/
 log.txt

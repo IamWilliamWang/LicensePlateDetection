@@ -21,6 +21,8 @@ from Detector import Transformer
 from Detector import VideoUtil
 import traceback
 
+from DatasetMakerGUI import GUI
+
 
 def detectLP(image: np.ndarray):
     image = cv2.resize(image, (0, 0), fx=args.scale, fy=args.scale, interpolation=cv2.INTER_CUBIC)
@@ -45,6 +47,15 @@ def detectLP(image: np.ndarray):
             preds = lprnet(transfer)
             preds = preds.cpu().detach().numpy()  # (1, 68, 18)
             labels, pred_labels = decode(preds, CHARS)
+            # 截图保存阶段
+            savedFileName = 'dataset/LPR_detection/%s.jpg' % labels[0]
+            postfix = 2
+            while os.path.exists(savedFileName):
+                savedFileName = savedFileName.split('.')[0].split(' (')[0] + ' (' + str(postfix) + ')' + '.jpg'
+                postfix += 1
+            if postfix <= 5:  # 同一辆车超过10次就放弃保存
+                GUI.cutImwrite(savedFileName, image, x1, x2, y1, y2)
+            # 图像显示阶段
             cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 1)
             image = cv2ImgAddText(image, labels[0], (x1, y1 - 12), textColor=(255, 255, 0), textSize=15)
 
@@ -71,9 +82,9 @@ if __name__ == '__main__':
     parser.add_argument('--mini_lp', dest='mini_lp', help="Minimum face to be detected", default=(50, 15), type=int)
     parser.add_argument('-folder', '--image_folder', help='存放图片的文件夹名', default=None, type=str)
     parser.add_argument('-video', '--video', help='录像文件名', default=None, type=str)
-    parser.add_argument('-time', '--time_limit', help='执行时间不超过多少秒', default=None, type=int)
-    parser.add_argument('-output', '--output_video', help='是否输出处理后的视频（True或False）', default='False', type=str)
     parser.add_argument('-wait', '--wait_time', help='显示窗口暂停时长', default=0, type=int)
+    parser.add_argument('-time', '--time_limit', help='执行时间不超过多少秒', default=None, type=int)
+    parser.add_argument('-output', '--output_video', help='是否输出处理后的视频（1或0）', default=0, type=int)
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -100,23 +111,26 @@ if __name__ == '__main__':
     elif args.video is not None:
         steamI = VideoUtil.OpenInputVideo(args.video)
         steamO = None
-        if args.output_video is 'True':
+        if args.output_video is 1:
             steamO = VideoUtil.OpenOutputVideo(args.video.replace('.mp4', '.out.mp4'), steamI, 'mp4v')
         fps = VideoUtil.GetFps(steamI)
         eof = False
         loopI = 0
-        while eof is False:
+        while True:
             ret, frame = steamI.read()
             if ret is False:
-                eof = True
+                break
             loopI += 1
-            if loopI % fps is 0:
-                if args.output_video is 'True':
-                    VideoUtil.WriteFrame(steamO, detectAndShow(frame))
-                else:
-                    detectAndShow(frame)
-                print('已处理%d秒' % (loopI // fps))
+            if args.output_video is 1:
+                VideoUtil.WriteFrame(steamO, detectAndShow(frame))
+            else:
+                detectAndShow(frame)
+            # print('已处理%d秒' % loopI)
             if args.time_limit is not None and time.time() - since > args.time_limit:
                 break
-        VideoUtil.CloseVideos(steamI, steamO)
+            VideoUtil.SkipReadFrames(steamI, fps*0.2)  # 跳过一秒
+        if args.output_video is 1:
+            VideoUtil.CloseVideos(steamO)
+        VideoUtil.CloseVideos(steamI)
+
     print("model inference in {:2.3f} seconds".format(time.time() - since))

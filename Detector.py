@@ -9,7 +9,8 @@ from datetime import datetime
 class VideoUtil:
 
     @staticmethod
-    def OpenVideos(inputVideoSource=None, outputVideoFilename=None, outputVideoEncoding='DIVX'):  # MPEG-4编码
+    def OpenVideos(inputVideoSource=None, outputVideoFilename=None, outputVideoEncoding='DIVX') -> tuple(
+        [cv2.VideoCapture, cv2.VideoWriter]):  # MPEG-4编码
         '''
         打开输入输出视频文件
         :param inputVideoSource: 输入文件名或视频流
@@ -26,7 +27,7 @@ class VideoUtil:
         return videoInput, videoOutput
 
     @staticmethod
-    def OpenInputVideo(inputVideoSource):
+    def OpenInputVideo(inputVideoSource) -> cv2.VideoCapture:
         '''
         打开输入视频文件
         :param inputVideoSource: 输入文件名或视频流
@@ -35,7 +36,7 @@ class VideoUtil:
         return cv2.VideoCapture(inputVideoSource)
 
     @staticmethod
-    def OpenOutputVideo(outputVideoFilename, inputFileStream, outputVideoEncoding='DIVX'):
+    def OpenOutputVideo(outputVideoFilename, inputFileStream, outputVideoEncoding='DIVX') -> cv2.VideoWriter:
         '''
         打开输出视频文件
         :param outputVideoFilename: 输出文件名
@@ -47,11 +48,10 @@ class VideoUtil:
         fps = int(inputFileStream.get(cv2.CAP_PROP_FPS))
         size = (int(inputFileStream.get(cv2.CAP_PROP_FRAME_WIDTH)),
                 int(inputFileStream.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-        return cv2.VideoWriter(outputVideoFilename, cv2.VideoWriter_fourcc(*outputVideoEncoding), fps, size,
-                               False)
+        return cv2.VideoWriter(outputVideoFilename, cv2.VideoWriter_fourcc(*outputVideoEncoding), fps, size, False)
 
     @staticmethod
-    def ReadFrames(stream, readFramesCount):
+    def ReadFrames(stream, readFramesCount) -> list:
         '''
         从输入流中读取最多readFramesCount个帧并返回，如果没有读取则返回None
         :param stream: 输入流
@@ -71,19 +71,19 @@ class VideoUtil:
         return frames
 
     @staticmethod
-    def ReadFrame(stream):
+    def ReadFrame(stream) -> numpy.ndarray:
         return numpy.asarray(VideoUtil.ReadFrames(stream, 1)[0])
 
     @staticmethod
-    def SkipReadFrames(stream, skippedFramesCount: int):
+    def SkipReadFrames(stream, skippedFramesCount: int) -> None:
         stream.set(cv2.CAP_PROP_POS_FRAMES, stream.get(cv2.CAP_PROP_POS_FRAMES) + skippedFramesCount)
 
     @staticmethod
-    def WriteFrame(stream, frame):
+    def WriteFrame(stream, frame) -> None:
         stream.write(frame)
 
     @staticmethod
-    def GetFps(videoStream):
+    def GetFps(videoStream) -> int:
         '''
         获得视频流的FPS
         :param videoStream: 视频输入流
@@ -92,7 +92,7 @@ class VideoUtil:
         return int(videoStream.get(cv2.CAP_PROP_FPS))
 
     @staticmethod
-    def GetVideoFileFrameCount(videoFileStream):
+    def GetVideoFileFrameCount(videoFileStream) -> int:
         '''
         获得视频文件的总帧数
         :param videoFileStream: 视频文件流
@@ -101,7 +101,7 @@ class VideoUtil:
         return videoFileStream.get(cv2.CAP_PROP_FRAME_COUNT)
 
     @staticmethod
-    def GetWidthAndHeight(videoStream):
+    def GetWidthAndHeight(videoStream) -> tuple([int, int]):
         '''
         获得视频流的宽度和高度
         :param videoStream: 视频流
@@ -110,7 +110,7 @@ class VideoUtil:
         return int(videoStream.get(cv2.CAP_PROP_FRAME_WIDTH)), int(videoStream.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     @staticmethod
-    def CloseVideos(*videoStreams):
+    def CloseVideos(*videoStreams) -> None:
         '''
         关闭所有视频文件
         :param videoStreams: 所有视频的文件流
@@ -127,7 +127,7 @@ class Transformer:
     '''
 
     @staticmethod
-    def Imread(filename_unicode: str):
+    def Imread(filename_unicode: str) -> numpy.ndarray:
         '''
         读取含有unicode文件名的图片
         :param filename_unicode: 含有unicode的图片名
@@ -136,12 +136,12 @@ class Transformer:
         return cv2.imdecode(numpy.fromfile(filename_unicode, dtype=numpy.uint8), -1)
 
     @staticmethod
-    def Imwrite(filename_unicode: str, frame):
+    def Imwrite(filename_unicode: str, frame) -> None:
         extension = filename_unicode[filename_unicode.rfind('.'):]
         cv2.imencode(extension, frame)[1].tofile(filename_unicode)
 
     @staticmethod
-    def IsGrayImage(grayOrImg):
+    def IsGrayImage(grayOrImg) -> bool:
         '''
         检测是否为灰度图，灰度图为True，彩图为False
         :param grayOrImg: 图片
@@ -150,7 +150,7 @@ class Transformer:
         return len(grayOrImg.shape) is 2
 
     @staticmethod
-    def GetGrayFromBGRImage(image):
+    def GetGrayFromBGRImage(image) -> numpy.ndarray:
         '''
         将读取的BGR转换为单通道灰度图
         :param image: BGR图片
@@ -159,7 +159,7 @@ class Transformer:
         return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     @staticmethod
-    def GetEdgesFromGray(grayFrame):
+    def GetEdgesFromGray(grayFrame) -> numpy.ndarray:
         '''
         将灰度图调用canny检测出edges，返回灰度edges图
         :param grayFrame: 灰度图
@@ -170,7 +170,7 @@ class Transformer:
         return edges
 
     @staticmethod
-    def GetEdgesFromImage(imageBGR):
+    def GetEdgesFromImage(imageBGR) -> numpy.ndarray:
         '''
         将彩色图转变为带有所有edges信息的黑白线条图
         :param imageBGR: 彩色图
@@ -179,7 +179,7 @@ class Transformer:
         return Transformer.GetEdgesFromGray(Transformer.GetGrayFromBGRImage(imageBGR))
 
     @staticmethod
-    def GetLinesFromEdges(edgesFrame, threshold=200):
+    def GetLinesFromEdges(edgesFrame, threshold=200) -> numpy.ndarray:
         '''
         单通道灰度图中识别内部所有线段并返回
         :param edgesFrame: edges图
@@ -195,7 +195,7 @@ class PlotUtil:
     '''
 
     @staticmethod
-    def PaintLinesOnImage(img, houghLines, paintLineCount=1, color=(0, 0, 255)):
+    def PaintLinesOnImage(img, houghLines, paintLineCount=1, color=(0, 0, 255)) -> None:
         '''
         在彩色图中划指定条霍夫线，线段的优先级由长到短
         :param img: BGR图片
@@ -216,7 +216,7 @@ class PlotUtil:
                 cv2.line(img, (x1, y1), (x2, y2), color, 2)
 
     @staticmethod
-    def PutText(img, text, location=(30, 30)):
+    def PutText(img, text, location=(30, 30)) -> None:
         '''
         在彩图img上使用默认字体写字
         :param img: 需要放置文字的图片
@@ -247,7 +247,7 @@ class SocketServer:
             print(msg)
             sys.exit(1)
 
-    def SendFrameShape(self, image):
+    def SendFrameShape(self, image) -> None:
         try:
             header = struct.pack('hhh', image.shape[0], image.shape[1], image.shape[2])  # 发送三个short型(16bit)的shape信息
             self.connection.sendall(header)
@@ -255,7 +255,7 @@ class SocketServer:
             print(msg)
             sys.exit(1)
 
-    def SendFrameImage(self, image):
+    def SendFrameImage(self, image) -> None:
         try:
             packet = struct.pack('=%sh' % image.size, *image.flatten())  # 将image展开为一维（没看懂）
             print('Sending frame...')
@@ -264,7 +264,7 @@ class SocketServer:
             print(msg)
             sys.exit(1)
 
-    def CloseConnection(self):
+    def CloseConnection(self) -> None:
         self.connection.close()
         print('Close connection from {0}'.format(self.address))
 
@@ -272,7 +272,7 @@ class SocketServer:
 lastSendSec = -1
 
 
-def CanIgnore():
+def CanIgnore() -> bool:
     global lastSendSec
     now_second = datetime.now().second
     pauseSec = 1
@@ -282,7 +282,7 @@ def CanIgnore():
     return True
 
 
-def SendUDP(content: str, ipAddress: str, port: int):
+def SendUDP(content: str, ipAddress: str, port: int) -> None:
     if CanIgnore():
         return
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -296,7 +296,7 @@ class Detector:
         self.__originalFrames = None  # 处理视频流时记录当前片段的原始录像
         self.__showWarningMutex = 0  # 用于切换警报状态的信号量
 
-    def LinesEquals(self, lines1, lines2, comparedLinesCount):
+    def LinesEquals(self, lines1, lines2, comparedLinesCount) -> bool:
         '''
         HoughLines函数返回的lines判断是否相等
         :param lines1: 第一个lines
@@ -320,7 +320,8 @@ class Detector:
             pass
         return sameCount / (sameCount + diffCount) > 0.9  # 不同到一定程度再报警
 
-    def GetNoChangeEdges_fromVideo(self, videoFilename, startFrameRate=0., endFrameRate=1., outputEdgesFilename=None):
+    def GetNoChangeEdges_fromVideo(self, videoFilename, startFrameRate=0., endFrameRate=1.,
+                                   outputEdgesFilename=None) -> numpy.ndarray:
         '''
         @Deprecated 从视频文件中提取不动物体的帧
         :param videoFilename: 文件名
@@ -356,7 +357,7 @@ class Detector:
             VideoUtil.CloseVideos(videoInput, outputVideo)
         return staticEdges
 
-    def GetNoChangeEdges_fromStream(self, inputStream, frame_count=20, outputEdgesFilename=None):
+    def GetNoChangeEdges_fromStream(self, inputStream, frame_count=20, outputEdgesFilename=None) -> numpy.ndarray:
         '''
         从输入流中提取不动物体的Edges帧
         :param inputStream: 输入文件流
@@ -385,7 +386,7 @@ class Detector:
         return staticEdges
 
     def StartUsingFileStream(self, videoFilename='开关柜3.mp4', compareLineCount=3,
-                             videoClipCount=26):  # 2.mp4用10、3.mp4用26
+                             videoClipCount=26) -> None:  # 2.mp4用10、3.mp4用26
         '''
         @Deprecated 针对视频文件进行的开关柜检测主函数
         :param videoFilename: 视频文件名
@@ -433,7 +434,7 @@ class Detector:
                     cv2.destroyAllWindows()
                     return
 
-    def IsWarningStatusChanged(self, exceptionOccurred, consecutiveOccurrencesNumber=3):
+    def IsWarningStatusChanged(self, exceptionOccurred, consecutiveOccurrencesNumber=3) -> bool:
         '''
         显示warning状态是否需要改变，True为需要显示Warning。False为需要关闭Warning。None为保持不变
         :param exceptionOccurred: 是否发生异常
@@ -456,7 +457,7 @@ class Detector:
                 return False  # 连续3次就返回撤销warning
         return None
 
-    def StartUsingVideoStream(self, source='rtsp://admin:1234abcd@192.168.1.64', compareLineCount=3):
+    def StartUsingVideoStream(self, source='rtsp://admin:1234abcd@192.168.1.64', compareLineCount=3) -> None:
         '''
         解析输入视频流，并在柜子出现变动时输出警告
         :param source: 视频源
@@ -511,7 +512,8 @@ class Detector:
                     break
         # When everything done, release the capture  
         cv2.destroyAllWindows()
-        mSocket.CloseConnection()
+        if SEND_FRAMES:
+            mSocket.CloseConnection()
 
 
 if __name__ == '__main__':
