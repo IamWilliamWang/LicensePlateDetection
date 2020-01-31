@@ -30,6 +30,27 @@ if __name__ == '__main__':
     imageFilesIndex: int = 0
 
 
+class Sqlite:
+    @staticmethod
+    def OpenConnect():
+        databaseName = args.save_dir + 'database.csv'
+        obj = Sqlite()
+        if os.path.exists(databaseName):
+            obj.fp = open(databaseName, 'a')
+        else:
+            obj.fp = open(databaseName, 'w')
+            obj.fp.write('原文件,新文件,左,右,上,下,宽度,高度\n')
+        return obj
+
+    def append(self, originalFileName, newFileName, left, right, top, bottom):
+        self.fp.write(
+            originalFileName + ',' + newFileName + ',' + str(left) + ',' + str(right) + ',' + str(top) + ',' + str(
+                bottom) + ',' + str(right - left) + ',' + str(bottom - top) + '\n')
+
+    def close(self):
+        self.fp.close()
+
+
 class GUI:
     """
     对视频、图片进行批量裁剪的主窗体类。鼠标功能：拖动即可截取图片，拖动完毕切换到下一张。
@@ -70,6 +91,7 @@ class GUI:
         self.selectPosition = None
         self.LPCountInPicture = 1
         self.偏移系数 = 1
+        self.database = Sqlite.OpenConnect()
         # 启动消息主循环
         self.root.mainloop()
 
@@ -296,6 +318,12 @@ class GUI:
         global savedIndex
         savedFile = args.save_dir + str(savedIndex) + '.jpg'
         GUI.cutImwrite(savedFile, self.frame, self.selectPosition)
+        if self.imagedirMode():
+            self.database.append(imageFiles[imageFilesIndex], savedFile, myleft, myright, mytop, mybottom)
+        elif self.imageMode():
+            self.database.append(args.image, savedFile, myleft, myright, mytop, mybottom)
+        elif self.videoMode():
+            self.database.append('', savedFile, myleft, myright, mytop, mybottom)
         savedIndex += 1
         print(savedFile, '已保存')
         self.title(savedFile + ' 已保存')
@@ -318,7 +346,7 @@ class GUI:
         Returns:
 
         """
-        myleft, myright, mytop, mybottom = [x for x in positions]
+        myleft, myright, mytop, mybottom = positions[0]
         clipFrame = image[mytop:mybottom, myleft:myright]
         Transformer.Imwrite(savedFileName, clipFrame)
 
