@@ -24,6 +24,22 @@ import traceback
 from DatasetMakerGUI import GUI
 
 
+def getInconflictFileName(fullFileName: str):
+    """
+    如果存在该文件，则将1.jpg改为 1 (2).jpg或1 (3).jpg等等
+    Args:
+        fullFileName:
+
+    Returns:
+        重命名后的文件名，重命名索引号
+    """
+    postfix = 1
+    while os.path.exists(fullFileName):
+        postfix += 1
+        fullFileName = fullFileName.split('.')[0].split(' (')[0] + ' (' + str(postfix) + ')' + '.jpg'
+    return fullFileName, postfix
+
+
 def detectLP(image: np.ndarray) -> np.ndarray:
     """
     检测车牌并在image上用方框和文字标出并返回
@@ -57,10 +73,7 @@ def detectLP(image: np.ndarray) -> np.ndarray:
             labels, pred_labels = decode(preds, CHARS)
             # 截图保存阶段
             savedFileName = 'dataset/LPR_detection/%s.jpg' % labels[0]
-            postfix = 2
-            while os.path.exists(savedFileName):
-                savedFileName = savedFileName.split('.')[0].split(' (')[0] + ' (' + str(postfix) + ')' + '.jpg'
-                postfix += 1
+            savedFileName, postfix = getInconflictFileName(savedFileName)
             if postfix <= 10:  # 同一辆车超过10次就放弃保存
                 GUI.cutImwrite(savedFileName, image, x1, x2, y1, y2)
             # 图像显示阶段
