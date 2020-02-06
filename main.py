@@ -24,7 +24,45 @@ import traceback
 from DatasetMakerGUI import GUI
 
 
-def getInconflictFileName(fullFileName: str):
+def getBoxesAndLabel(image: np.ndarray) -> list:
+    """
+    输入图片帧，输出{left:方框的左坐标, right:右坐标, top:上坐标, bottom:下坐标, label:检测出的车牌号}的列表
+    Args:
+        image: 输入的彩色图像
+
+    Returns:
+        含有多个dict的list（取绝于图片中车牌的数量）
+    """
+    boxesLabelList = []
+    image = cv2.resize(image, (0, 0), fx=args.scale, fy=args.scale, interpolation=cv2.INTER_CUBIC)
+    bboxes = create_mtcnn_net(image, args.mini_lp, device, p_model_path='MTCNN/weights/pnet_Weights',
+                              o_model_path='MTCNN/weights/onet_Weights')
+
+    for i in range(bboxes.shape[0]):
+        resultDict = {}
+        bbox = bboxes[i, :4]
+        x1, y1, x2, y2 = bbox.astype(int)
+        # 车牌在边缘的时候，处理方框
+        x1 = 0 if x1 < 0 else x1
+        y1 = 0 if y1 < 0 else y1
+        resultDict['left'], resultDict['right'], resultDict['top'], resultDict['bottom'] = x1, x2, y1, y2
+        w = int(x2 - x1 + 1.0)
+        h = int(y2 - y1 + 1.0)
+        img_box = np.zeros((h, w, 3))
+        img_box = image[y1:y2 + 1, x1:x2 + 1, :]
+        im = cv2.resize(img_box, (94, 24), interpolation=cv2.INTER_CUBIC)
+        im = (np.transpose(np.float32(im), (2, 0, 1)) - 127.5) * 0.0078125
+        data = torch.from_numpy(im).float().unsqueeze(0).to(device)  # torch.Size([1, 3, 24, 94])
+        transfer = STN(data)
+        preds = lprnet(transfer)
+        preds = preds.cpu().detach().numpy()  # (1, 68, 18)
+        labels, pred_labels = decode(preds, CHARS)
+        resultDict['label'] = labels[0]
+        boxesLabelList += [resultDict]
+    return boxesLabelList
+
+
+def getInconflictFileName(fullFileName: str) -> tuple:
     """
     如果存在该文件，则将1.jpg改为 1 (2).jpg或1 (3).jpg等等
     Args:
@@ -49,36 +87,20 @@ def detectLP(image: np.ndarray) -> np.ndarray:
     Returns: 标好的图片
 
     """
-    image = cv2.resize(image, (0, 0), fx=args.scale, fy=args.scale, interpolation=cv2.INTER_CUBIC)
-    bboxes = create_mtcnn_net(image, args.mini_lp, device, p_model_path='MTCNN/weights/pnet_Weights',
-                              o_model_path='MTCNN/weights/onet_Weights')
-
     try:
-        for i in range(bboxes.shape[0]):
-            bbox = bboxes[i, :4]
-            x1, y1, x2, y2 = [int(bbox[j]) for j in range(4)]
-            # 车牌在边缘的时候，处理方框
-            x1 = 0 if x1 < 0 else x1
-            y1 = 0 if y1 < 0 else y1
-            w = int(x2 - x1 + 1.0)
-            h = int(y2 - y1 + 1.0)
-            img_box = np.zeros((h, w, 3))
-            img_box = image[y1:y2 + 1, x1:x2 + 1, :]
-            im = cv2.resize(img_box, (94, 24), interpolation=cv2.INTER_CUBIC)
-            im = (np.transpose(np.float32(im), (2, 0, 1)) - 127.5) * 0.0078125
-            data = torch.from_numpy(im).float().unsqueeze(0).to(device)  # torch.Size([1, 3, 24, 94])
-            transfer = STN(data)
-            preds = lprnet(transfer)
-            preds = preds.cpu().detach().numpy()  # (1, 68, 18)
-            labels, pred_labels = decode(preds, CHARS)
+        detectList = getBoxesAndLabel(image)
+        for i in range(len(detectList)):
+            dict = detectList[i]
+            x1, x2, y1, y2, label = dict['left'], dict['right'], dict['top'], dict['bottom'], dict['label']
             # 截图保存阶段
-            savedFileName = 'dataset/LPR_detection/%s.jpg' % labels[0]
+            savedFileName = 'dataset/LPR_detection/%s.jpg' % label
             savedFileName, postfix = getInconflictFileName(savedFileName)
             if postfix <= 10:  # 同一辆车超过10次就放弃保存
                 GUI.cutImwrite(savedFileName, image, x1, x2, y1, y2)
             # 图像显示阶段
             cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 1)
-            image = cv2ImgAddText(image, labels[0], (x1, y1 - 12), textColor=(255, 255, 0), textSize=15)
+            image = cv2ImgAddText(image, label, (x1, y1 - 12), textColor=(255, 255, 0), textSize=15)
+            print('检测到', label)
 
         image = cv2.resize(image, (0, 0), fx=1 / args.scale, fy=1 / args.scale, interpolation=cv2.INTER_CUBIC)
         return image

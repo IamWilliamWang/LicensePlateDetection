@@ -330,7 +330,7 @@ class GUI:
         lastDrawedRectangle = self.canvas.create_rectangle(left, top, right, bottom, outline="red")
         global saveRawFileName
         saveFullFileName = args.save_dir + str(saveRawFileName) + '.jpg'
-        GUI.cutImwrite(saveFullFileName, self.frame, self.selectPosition)
+        GUI.cutImwrite(saveFullFileName, self.frame, left, right, top, bottom)
         if self.isImageDirMode():
             self.database.append(imageFiles[imageFilesIndex], saveFullFileName, left, right, top, bottom)
         elif self.isImageMode():
@@ -348,19 +348,16 @@ class GUI:
             self.LPCountInPicture -= 1
 
     @staticmethod
-    def cutImwrite(savedFileName: str, image: np.ndarray, *positions: int):
+    def cutImwrite(savedFileName: str, image: np.ndarray, left: int, right: int, top: int, bottom: int):
         """
-        裁剪图片并保存
+        
         Args:
             savedFileName: 要保存的图片文件名
             image: 需要被裁减的图片
-            *positions: [左，右，上，下坐标]。要求：左<右，上<下
+            left, right, top, bottom: 左，右，上，下坐标。要求：左<右，上<下
 
-        Returns:
-
-        """
-        myleft, myright, mytop, mybottom = positions[0]
-        clipFrame = image[mytop:mybottom, myleft:myright]
+        """""
+        clipFrame = image[top:bottom, left:right]
         Transformer.Imwrite(savedFileName, clipFrame)
     # endregion
 
