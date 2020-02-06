@@ -17,8 +17,8 @@ import torch
 import time
 import cv2
 import os
-from Detector import Transformer
-from Detector import VideoUtil
+from DetectorUtil import Transformer
+from DetectorUtil import VideoUtil
 import traceback
 
 from DatasetMakerGUI import GUI
@@ -117,18 +117,7 @@ def detectAndShow(image: np.ndarray) -> np.ndarray:
     return image
 
 
-if __name__ == '__main__':
-    # 解析参数
-    parser = argparse.ArgumentParser(description='MTCNN & LPR Demo')
-    parser.add_argument('-image', '--image', help='image path', default='test/8.jpg', type=str)
-    parser.add_argument('--scale', dest='scale', help="scale the iamge", default=1, type=int)
-    parser.add_argument('--mini_lp', dest='mini_lp', help="Minimum face to be detected", default=(50, 15), type=int)
-    parser.add_argument('-folder', '--image_folder', help='存放图片的文件夹名', default=None, type=str)
-    parser.add_argument('-video', '--video', help='录像文件名', default=None, type=str)
-    parser.add_argument('-wait', '--wait_time', help='显示窗口暂停时长', default=0, type=int)
-    parser.add_argument('-time', '--time_limit', help='执行时间不超过多少秒', default=None, type=int)
-    parser.add_argument('-output', '--output_video', help='是否输出处理后的视频（1或0）', default=0, type=int)
-    args = parser.parse_args()
+def initialize():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # 初始化LPRNet
     lprnet = LPRNet(class_num=len(CHARS), dropout_rate=0)
@@ -142,6 +131,21 @@ if __name__ == '__main__':
     STN.load_state_dict(torch.load('LPRNet/weights/Final_STN_model.pth', map_location=lambda storage, loc: storage))
     STN.eval()
     print("Successful to build LPR network!")
+
+
+if __name__ == '__main__':
+    # 解析参数
+    parser = argparse.ArgumentParser(description='MTCNN & LPR Demo')
+    parser.add_argument('-image', '--image', help='image path', default='test/8.jpg', type=str)
+    parser.add_argument('--scale', dest='scale', help="scale the iamge", default=1, type=int)
+    parser.add_argument('--mini_lp', dest='mini_lp', help="Minimum face to be detected", default=(50, 15), type=int)
+    parser.add_argument('-folder', '--image_folder', help='存放图片的文件夹名', default=None, type=str)
+    parser.add_argument('-video', '--video', help='录像文件名', default=None, type=str)
+    parser.add_argument('-wait', '--wait_time', help='显示窗口暂停时长', default=0, type=int)
+    parser.add_argument('-time', '--time_limit', help='执行时间不超过多少秒', default=None, type=int)
+    parser.add_argument('-output', '--output_video', help='是否输出处理后的视频（1或0）', default=0, type=int)
+    args = parser.parse_args()
+    initialize()
     # 开始遍历，启动模型
     since = time.time()
     if args.image_folder is not None:

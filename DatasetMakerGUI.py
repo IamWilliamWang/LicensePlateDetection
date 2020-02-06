@@ -4,9 +4,10 @@ import numpy as np
 import tkinter
 import tkinter.messagebox
 from PIL import Image, ImageTk
-from Detector import VideoUtil
-from Detector import Transformer
+from DetectorUtil import VideoUtil
+from DetectorUtil import Transformer
 import argparse
+import LPDetector
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='数据集图像裁剪器')
@@ -100,7 +101,7 @@ class GUI:
         else:
             saveRawFileName = 1
 
-    def show(self):
+    def showDialog(self):
         """
         启动消息主循环
         """
@@ -366,8 +367,8 @@ if __name__ == '__main__':
     if args.video is not None:
         video = args.video
         video = video.replace('\"', '')
-        GUI(VideoUtil.OpenInputVideo(video)).show()
+        GUI(VideoUtil.OpenInputVideo(video)).showDialog()
     elif args.image is not None:
-        GUI(None).show()
+        GUI(None).showDialog()
     elif args.image_dir is not None:
-        GUI(None).show()
+        GUI(None).showDialog()
