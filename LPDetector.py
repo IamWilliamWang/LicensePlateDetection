@@ -21,10 +21,16 @@ from DetectorUtil import Transformer
 from DetectorUtil import VideoUtil
 import traceback
 
-from DatasetMakerGUI import GUI
+
+def cutImwrite(savedFileName: str, image: np.ndarray, left: int, right: int, top: int, bottom: int):
+    """
+    @see DatasetMakerGUI.GUI.cutImwrite
+    """""
+    clipFrame = image[top:bottom, left:right]
+    Transformer.Imwrite(savedFileName, clipFrame)
 
 
-def getBoxesAndLabel(image: np.ndarray) -> list:
+def getBoxesAndLabels(image: np.ndarray, scale, mini_lp, device) -> list:
     """
     输入图片帧，输出{left:方框的左坐标, right:右坐标, top:上坐标, bottom:下坐标, label:检测出的车牌号}的列表
     Args:
@@ -33,9 +39,9 @@ def getBoxesAndLabel(image: np.ndarray) -> list:
     Returns:
         含有多个dict的list（取绝于图片中车牌的数量）
     """
-    boxesLabelList = []
-    image = cv2.resize(image, (0, 0), fx=args.scale, fy=args.scale, interpolation=cv2.INTER_CUBIC)
-    bboxes = create_mtcnn_net(image, args.mini_lp, device, p_model_path='MTCNN/weights/pnet_Weights',
+    boxesLabelsList = []
+    image = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    bboxes = create_mtcnn_net(image, mini_lp, device, p_model_path='MTCNN/weights/pnet_Weights',
                               o_model_path='MTCNN/weights/onet_Weights')
 
     for i in range(bboxes.shape[0]):
@@ -58,8 +64,8 @@ def getBoxesAndLabel(image: np.ndarray) -> list:
         preds = preds.cpu().detach().numpy()  # (1, 68, 18)
         labels, pred_labels = decode(preds, CHARS)
         resultDict['label'] = labels[0]
-        boxesLabelList += [resultDict]
-    return boxesLabelList
+        boxesLabelsList += [resultDict]
+    return boxesLabelsList
 
 
 def getInconflictFileName(fullFileName: str) -> tuple:
@@ -88,7 +94,7 @@ def detectLP(image: np.ndarray) -> np.ndarray:
 
     """
     try:
-        detectList = getBoxesAndLabel(image)
+        detectList = getBoxesAndLabels(image, args.scale, args.mini_lp, device)
         for i in range(len(detectList)):
             dict = detectList[i]
             x1, x2, y1, y2, label = dict['left'], dict['right'], dict['top'], dict['bottom'], dict['label']
@@ -96,7 +102,7 @@ def detectLP(image: np.ndarray) -> np.ndarray:
             savedFileName = 'dataset/LPR_detection/%s.jpg' % label
             savedFileName, postfix = getInconflictFileName(savedFileName)
             if postfix <= 10:  # 同一辆车超过10次就放弃保存
-                GUI.cutImwrite(savedFileName, image, x1, x2, y1, y2)
+                cutImwrite(savedFileName, image, x1, x2, y1, y2)
             # 图像显示阶段
             cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 1)
             image = cv2ImgAddText(image, label, (x1, y1 - 12), textColor=(255, 255, 0), textSize=15)
@@ -118,6 +124,7 @@ def detectAndShow(image: np.ndarray) -> np.ndarray:
 
 
 def initialize():
+    global device, lprnet, STN
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # 初始化LPRNet
     lprnet = LPRNet(class_num=len(CHARS), dropout_rate=0)

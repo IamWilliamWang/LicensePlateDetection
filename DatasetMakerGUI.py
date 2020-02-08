@@ -3,7 +3,7 @@ import os
 import numpy as np
 import tkinter
 import tkinter.messagebox
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw, ImageFont
 from DetectorUtil import VideoUtil
 from DetectorUtil import Transformer
 import argparse
@@ -18,11 +18,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-class Sqlite:
+class DbLite:
     @staticmethod
     def OpenConnect():
         databaseName = args.save_dir + 'database.csv'
-        obj = Sqlite()
+        obj = DbLite()
         if os.path.exists(databaseName):
             obj.fp = open(databaseName, 'a')
         else:
@@ -51,6 +51,9 @@ class GUI:
     a：增加跳转幅度（每次跳过的秒数要乘跳转幅度，只适用于视频模式）
     d：减小跳转幅度（每次跳过的秒数要乘跳转幅度，只适用于视频模式）
     """
+    __slots__ = (
+        'videoStream', 'staticText', 'root', 'canvas', 'database', 'X', 'Y', 'selectPosition', 'LPCountInPicture',
+        '偏移系数', 'baseFrame', 'baseTkImg', 'draging', 'boxesAndLabels')
 
     def __init__(self, videoStream):
         # 初始化属性
@@ -67,7 +70,7 @@ class GUI:
         self.root.bind('<space>', self.space_Press)  # 空格键
         self.root.resizable(False, False)
         self.title()  # 刷新界面标题
-        # 刷新canvas，绑定事件
+        # 创建canvas，绑定事件
         screenWidth = self.baseTkImg.width()  # root.winfo_screenwidth()
         screenHeight = self.baseTkImg.height()  # root.winfo_screenheight()
         self.canvas = tkinter.Canvas(self.root, bg='white', width=screenWidth, height=screenHeight)
@@ -78,7 +81,7 @@ class GUI:
         self.canvas.bind('<ButtonRelease-1>', self.leftMouse_Up)  # 鼠标抬起
         self.canvas.place(x=0, y=0)  # pack(fill=tkinter.Y,expand=tkinter.YES)
         # 打开标记记录数据库
-        self.database = Sqlite.OpenConnect()
+        self.database = DbLite.OpenConnect()
         # 初始化鼠标事件的位置容器
         self.X = tkinter.IntVar(value=0)
         self.Y = tkinter.IntVar(value=0)
@@ -100,6 +103,11 @@ class GUI:
                 saveRawFileName = 1
         else:
             saveRawFileName = 1
+        # 加载第一张图片
+        if self.isImageDirMode():
+            self.loadNextFrame(0)
+        elif self.isVideoMode():
+            self.loadNextFrame()
 
     def showDialog(self):
         """
@@ -110,7 +118,7 @@ class GUI:
     # region 工具函数
     def frame2TkImage(self, frame: np.ndarray) -> ImageTk.PhotoImage:
         """
-        转换frame为tkImage
+        转换frame为tkImage。（潜在的bug：只能转换一次，多次转换同一张图会返回空白！！）
         Args:
             frame: 原始帧
 
@@ -143,55 +151,6 @@ class GUI:
         """
         return args.image_dir is not None
 
-    # endregion
-    # region 读取与显示
-    def setCanvasImg(self, tkImage):
-        self.canvas.create_image(0, 0, anchor='nw', image=tkImage)
-
-    def readFrame(self) -> np.ndarray:
-        """
-        读取一帧，无论何种模式
-        Returns:
-
-        """
-        if self.isVideoMode():
-            self.frame = VideoUtil.ReadFrame(self.videoStream)
-            return self.frame
-        elif self.isImageMode():
-            self.frame = Transformer.Imread(args.image)
-            return self.frame
-        elif self.isImageDirMode():
-            global imageFiles, imageFilesIndex
-            if imageFiles is None:
-                imageFiles = os.listdir(args.image_dir)
-                imageFiles = [os.path.join(args.image_dir, filename) for filename in imageFiles]
-            # return Transformer.Imread(str(param))
-            self.frame = Transformer.Imread(imageFiles[imageFilesIndex % len(imageFiles)])
-            imageFilesIndex += 1
-            return self.frame
-
-    def showNextFrame(self, skipTimes=None) -> None:
-        '''
-        加载并显示之后的图像/图片。
-        Args:
-            skipTimes: 如果是文件夹模式则为跳过几张图片。如果是视频模式则为跳过几秒（偏移系数未变时）。
-
-        Returns:
-
-        '''
-        skipTimes = skipTimes if skipTimes is not None else 1
-        if self.isVideoMode():
-            VideoUtil.SkipReadFrames(self.videoStream, VideoUtil.GetFps(self.videoStream) * skipTimes * self.偏移系数)
-            self.frame = self.readFrame()
-        else:
-            global imageFilesIndex
-            imageFilesIndex += skipTimes - 1  # 标记完索引已自动跳到下一张
-            self.frame = self.readFrame()
-
-        self.baseTkImg = self.frame2TkImage(self.frame)
-        self.setCanvasImg(self.baseTkImg)
-
-    # endregion
     def title(self, titleText=None, staticText=None) -> None:
         """
         设置显示窗口标题
@@ -208,6 +167,78 @@ class GUI:
             mTitle += ' (' + titleText + ')'
         self.root.title(mTitle)
 
+    def cv2ImgAddText(self, img, text, pos, textColor=(255, 0, 0), textSize=12):
+        """
+        @see LPRNet.LPRNet_Test.cv2ImgAddText
+        """
+        if (isinstance(img, np.ndarray)):  # detect opencv format or not
+            img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(img)
+        fontText = ImageFont.truetype("LPRNet/data/NotoSansCJK-Regular.ttc", textSize, encoding="utf-8")
+        draw.text(pos, text, textColor, font=fontText)
+
+        return cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
+
+    # endregion
+
+    # region 读取与显示
+    def setCanvasImg(self, tkImage):
+        self.canvas.create_image(0, 0, anchor='nw', image=tkImage)
+
+    def readFrame(self) -> np.ndarray:
+        """
+        读取一帧，无论何种模式
+        Returns:
+
+        """
+        if self.isVideoMode():
+            frame = VideoUtil.ReadFrame(self.videoStream)
+            return frame
+        elif self.isImageMode():
+            frame = Transformer.Imread(args.image)
+            return frame
+        elif self.isImageDirMode():
+            global imageFiles, imageFilesIndex
+            if imageFiles is None:
+                imageFiles = os.listdir(args.image_dir)
+                imageFiles = [os.path.join(args.image_dir, filename) for filename in imageFiles]
+            # return Transformer.Imread(str(param))
+            frame = Transformer.Imread(imageFiles[imageFilesIndex % len(imageFiles)])
+            imageFilesIndex += 1
+            return frame
+
+    def refreshRectanglesAndLabels(self):
+        frame = self.baseFrame
+        for licensePlateDict in self.boxesAndLabels:
+            frame = self.cv2ImgAddText(frame, licensePlateDict['label'],
+                                       (licensePlateDict['left'], licensePlateDict['top'] - 12))
+        self.setCanvasImg(self.frame2TkImage(frame))
+
+    # endregion
+
+    def loadNextFrame(self, skipSteps=None) -> None:
+        '''
+        加载并显示之后的图像/图片。
+        Args:
+            skipSteps: 如果是文件夹模式则为跳过几张图片。如果是视频模式则为跳过几秒（偏移系数未变时）。
+
+        Returns:
+
+        '''
+        skipSteps = skipSteps if skipSteps is not None else 1
+        if self.isVideoMode():
+            VideoUtil.SkipReadFrames(self.videoStream, VideoUtil.GetFps(self.videoStream) * skipSteps * self.偏移系数)
+            self.baseFrame = self.readFrame()
+        else:
+            global imageFilesIndex
+            imageFilesIndex += skipSteps - 1  # 标记完索引已自动跳到下一张
+            self.baseFrame = self.readFrame()
+
+        # self.baseTkImg = self.frame2TkImage(self.baseFrame) # 加上这句就会全屏空白，原因见函数内！
+        # 开始检测车牌号
+        self.boxesAndLabels = LPDetector.getBoxesAndLabels(self.baseFrame, 1, (50, 15), None)
+        self.refreshRectanglesAndLabels()
+
     # region 键盘事件
     def key_Press(self, event):
         """
@@ -219,9 +250,9 @@ class GUI:
 
         """
         if '1' <= event.char <= '9':
-            self.showNextFrame(int(event.char))
+            self.loadNextFrame(int(event.char))
         elif event.char is '0':
-            self.showNextFrame(10)
+            self.loadNextFrame(10)
         elif self.isVideoMode():
             if event.char is '-':
                 self.偏移系数 *= -1
@@ -242,7 +273,7 @@ class GUI:
         Returns:
 
         """
-        self.showNextFrame(30)
+        self.loadNextFrame(30)
 
     def space_Press(self, event):
         """
@@ -256,6 +287,7 @@ class GUI:
         self.LPCountInPicture += 1
 
     # endregion
+
     # region 鼠标事件
     # 鼠标左键按下的位置
     def leftMouse_Down(self, event):
@@ -318,6 +350,7 @@ class GUI:
         self.cutPictureAndShow()
 
     # endregion
+
     # region 裁剪与储存
     def cutPictureAndShow(self) -> None:
         """
@@ -331,7 +364,7 @@ class GUI:
         lastDrawedRectangle = self.canvas.create_rectangle(left, top, right, bottom, outline="red")
         global saveRawFileName
         saveFullFileName = args.save_dir + str(saveRawFileName) + '.jpg'
-        GUI.cutImwrite(saveFullFileName, self.frame, left, right, top, bottom)
+        GUI.cutImwrite(saveFullFileName, self.baseFrame, left, right, top, bottom)
         if self.isImageDirMode():
             self.database.append(imageFiles[imageFilesIndex], saveFullFileName, left, right, top, bottom)
         elif self.isImageMode():
@@ -344,7 +377,7 @@ class GUI:
         if self.isImageMode():
             return
         if self.LPCountInPicture is 1:
-            self.showNextFrame()
+            self.loadNextFrame()
         else:
             self.LPCountInPicture -= 1
 
@@ -364,6 +397,7 @@ class GUI:
 
 
 if __name__ == '__main__':
+    LPDetector.initialize()
     if args.video is not None:
         video = args.video
         video = video.replace('\"', '')
