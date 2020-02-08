@@ -1,13 +1,15 @@
-import cv2
+import argparse
 import os
-import numpy as np
 import tkinter
 import tkinter.messagebox
+
+import cv2
+import numpy as np
 from PIL import Image, ImageTk, ImageDraw, ImageFont
-from DetectorUtil import VideoUtil
-from DetectorUtil import Transformer
-import argparse
+
 import LPDetector
+from DetectorUtil import Transformer
+from DetectorUtil import VideoUtil
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='数据集图像裁剪器')
@@ -18,6 +20,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
+# region 简单数据库
 class DbLite:
     @staticmethod
     def OpenConnect():
@@ -39,6 +42,50 @@ class DbLite:
         self.fp.close()
 
 
+# endregion
+
+# region 自制InputBox
+class _Inputbox():
+    def __init__(self, title, description, defaultText):
+        self._root = tkinter.Tk()
+        scrrenWidth = self._root.winfo_screenwidth()  # 获取桌面宽度
+        screenHeight = self._root.winfo_screenheight()  # 获取桌面高度
+        width = 320  # 输入框的宽度
+        height = 100  # 输入框的高度
+        startx = (scrrenWidth - width) / 2  # 起始x坐标（居中显示用)
+        starty = (screenHeight - height) / 2  # 起始y坐标
+        # self._root.geometry("%dx%d%+d%+d" % (width, height, startx, starty))
+        self._root.geometry("%+d%+d" % (startx, starty))
+        self._root.resizable(False, False)
+        self._root.title(title)
+        if description is not '':
+            self.label = tkinter.Label(self._root, text=description)
+            self.label.pack()
+        self.entry = tkinter.Entry(self._root, width=36, textvariable=tkinter.StringVar(value=defaultText))
+        self.entry.pack(padx=3, side=tkinter.LEFT)
+        self.entry.focus()
+        self.entry.bind("<Return>", self.enterPressed)  # 绑定回车键
+        self.button = tkinter.Button(self._root, text='确定', command=self.buttonClicked)  # 确定按钮
+        self.button.pack(padx=2, side=tkinter.RIGHT)  # 放在右边
+        self.text = ''
+        self._root.mainloop()
+
+    def buttonClicked(self):
+        self.text = self.entry.get()
+        self._root.destroy()
+        self._root.quit()
+
+    def enterPressed(self, event):
+        self.buttonClicked()
+
+
+def inputbox(title="请输入", description="", defaultText=""):
+    inputForm = _Inputbox(title, description, defaultText)
+    return inputForm.text
+
+
+# endregion
+
 class GUI:
     """
     对视频、图片进行批量裁剪的主窗体类。鼠标功能：拖动即可截取图片，拖动完毕切换到下一张。
@@ -59,6 +106,14 @@ class GUI:
         # 初始化属性
         self.videoStream = videoStream
         self.staticText = None
+        # 初始化一般变量
+        self.selectPosition = None
+        self.LPCountInPicture = 1
+        global lastDrawedRectangle, imageFiles, imageFilesIndex, saveRawFileName
+        lastDrawedRectangle = None
+        imageFiles = None
+        imageFilesIndex = 0
+        self.偏移系数 = 1
         # 创建主窗口
         self.root = tkinter.Tk()
         self.root.state("zoomed")
@@ -85,14 +140,6 @@ class GUI:
         # 初始化鼠标事件的位置容器
         self.X = tkinter.IntVar(value=0)
         self.Y = tkinter.IntVar(value=0)
-        # 初始化一般变量
-        self.selectPosition = None
-        self.LPCountInPicture = 1
-        global lastDrawedRectangle, imageFiles, imageFilesIndex, saveRawFileName
-        lastDrawedRectangle = None
-        imageFiles = None
-        imageFilesIndex = 0
-        self.偏移系数 = 1
         # 分配合理的存储文件名
         if len(os.listdir(args.save_dir)) is not 0:
             savedjpgs = os.listdir(args.save_dir)
@@ -208,13 +255,18 @@ class GUI:
             return frame
 
     def refreshRectanglesAndLabels(self):
-        frame = self.baseFrame
+        # frame = self.baseFrame
         for licensePlateDict in self.boxesAndLabels:
-            frame = self.cv2ImgAddText(frame, licensePlateDict['label'],
-                                       (licensePlateDict['left'], licensePlateDict['top'] - 12))
-        self.setCanvasImg(self.frame2TkImage(frame))
-
-    # endregion
+            global lastDrawedRectangle
+            lastDrawedRectangle = self.canvas.create_rectangle(licensePlateDict['left'], licensePlateDict['top'],
+                                                               licensePlateDict['right'], licensePlateDict['bottom'],
+                                                               outline="red")
+            self.canvas.create_text(licensePlateDict['left'] + 37, licensePlateDict['top'] - 10,
+                                    text=licensePlateDict['label'], font=('宋体', 15), fill='red')
+            # frame = self.cv2ImgAddText(frame, licensePlateDict['label'],
+            #                            (licensePlateDict['left'], licensePlateDict['top'] - 12),
+            #                            textColor=(255, 255, 0), textSize=15)
+        # self.setCanvasImg(self.frame2TkImage(frame))
 
     def loadNextFrame(self, skipSteps=None) -> None:
         '''
@@ -238,6 +290,8 @@ class GUI:
         # 开始检测车牌号
         self.boxesAndLabels = LPDetector.getBoxesAndLabels(self.baseFrame, 1, (50, 15), None)
         self.refreshRectanglesAndLabels()
+
+    # endregion
 
     # region 键盘事件
     def key_Press(self, event):
@@ -345,8 +399,15 @@ class GUI:
         myleft, myright = sorted([self.X.get(), upx])
         mytop, mybottom = sorted([self.Y.get(), upy])
         self.selectPosition = (myleft, myright, mytop, mybottom)
+        vehicle = {'left': myleft, 'right': myright, 'top': mytop, 'bottom': mybottom}
         print("选择区域：xmin:" + str(myleft) + ' ymin:' + str(mytop) + ' xmax:' + str(myright) + ' ymax:' + str(
             mybottom))  # 对应image中坐标信息
+        input = inputbox('输入车辆车牌号')
+        if input is not '':
+            vehicle['label'] = input
+            self.boxesAndLabels += [vehicle]
+            print('已选中:', input)
+        self.refreshRectanglesAndLabels()
         self.cutPictureAndShow()
 
     # endregion
@@ -359,9 +420,6 @@ class GUI:
 
         """
         left, right, top, bottom = [x for x in self.selectPosition]
-        # 新添加Label控件和Entry控件以及Button，接收在canvas中点出的框坐标
-        global lastDrawedRectangle
-        lastDrawedRectangle = self.canvas.create_rectangle(left, top, right, bottom, outline="red")
         global saveRawFileName
         saveFullFileName = args.save_dir + str(saveRawFileName) + '.jpg'
         GUI.cutImwrite(saveFullFileName, self.baseFrame, left, right, top, bottom)
