@@ -181,7 +181,7 @@ if __name__ == '__main__':
             # print('已处理%d秒' % loopI)
             if args.time_limit is not None and time.time() - since > args.time_limit:
                 break
-            VideoUtil.SkipReadFrames(steamI, fps * 0.2)  # 跳过一秒
+            VideoUtil.SkipReadFrames(steamI, fps)  # 跳过一秒
         if args.output_video is 1:
             VideoUtil.CloseVideos(steamO)
         VideoUtil.CloseVideos(steamI)

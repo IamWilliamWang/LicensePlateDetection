@@ -17,29 +17,32 @@ if __name__ == '__main__':
     parser.add_argument('-video', '--video', type=str, help='视频文件名', default=None)
     parser.add_argument('-imgdir', '--image_dir', type=str, help='存放照片的文件夹名', default=None)
     parser.add_argument('-image', '--image', type=str, help='单个图片的文件名', default=None)
+    parser.add_argument('-smart', '--enable_smart_tool', type=int, help='开启自动标注插件，识别出车牌会自动提前标注', default=1)
     args = parser.parse_args()
 
 
-# region 简单数据库
+# region 数据库
 class DbLite:
+    fp = None
+
     @staticmethod
     def OpenConnect():
-        databaseName = args.save_dir + 'database.csv'
-        obj = DbLite()
-        if os.path.exists(databaseName):
-            obj.fp = open(databaseName, 'a')
+        DbLite.databaseName = args.save_dir + 'database.csv'
+        if os.path.exists(DbLite.databaseName):
+            DbLite.fp = open(DbLite.databaseName, 'a')
         else:
-            obj.fp = open(databaseName, 'w')
-            obj.fp.write('原文件,新文件,左,右,上,下,宽度,高度\n')
-        return obj
+            DbLite.fp = open(DbLite.databaseName, 'w')
+            DbLite.fp.write('原文件,新文件,左,右,上,下,宽度,高度\n')
 
-    def append(self, originalFileName, newFileName, left, right, top, bottom):
-        self.fp.write(
+    @staticmethod
+    def append(originalFileName, newFileName, left, right, top, bottom):
+        DbLite.fp.write(
             originalFileName + ',' + newFileName + ',' + str(left) + ',' + str(right) + ',' + str(top) + ',' + str(
                 bottom) + ',' + str(right - left) + ',' + str(bottom - top) + '\n')
 
-    def close(self):
-        self.fp.close()
+    @staticmethod
+    def close():
+        DbLite.fp.close()
 
 
 # endregion
@@ -61,22 +64,23 @@ class _Inputbox():
         if description is not '':
             self.label = tkinter.Label(self._root, text=description)
             self.label.pack()
-        self.entry = tkinter.Entry(self._root, width=36, textvariable=tkinter.StringVar(value=defaultText))
-        self.entry.pack(padx=3, side=tkinter.LEFT)
-        self.entry.focus()
-        self.entry.bind("<Return>", self.enterPressed)  # 绑定回车键
-        self.button = tkinter.Button(self._root, text='确定', command=self.buttonClicked)  # 确定按钮
+        self.textbox = tkinter.Entry(self._root, width=36, textvariable=tkinter.StringVar(value=defaultText))
+        self.textbox.pack(padx=3, side=tkinter.LEFT)
+        self.textbox.focus()
+        self.textbox.bind_all("<Return>", self._enterPressed)  # 绑定回车键
+        self.button = tkinter.Button(self._root, text='确定', command=self._buttonClicked)  # 确定按钮
         self.button.pack(padx=2, side=tkinter.RIGHT)  # 放在右边
         self.text = ''
+        self._root.focus_force()
         self._root.mainloop()
 
-    def buttonClicked(self):
-        self.text = self.entry.get()
+    def _buttonClicked(self):
+        self.text = self.textbox.get()
         self._root.destroy()
         self._root.quit()
 
-    def enterPressed(self, event):
-        self.buttonClicked()
+    def _enterPressed(self, event):
+        self._buttonClicked()
 
 
 def inputbox(title="请输入", description="", defaultText=""):
@@ -88,19 +92,20 @@ def inputbox(title="请输入", description="", defaultText=""):
 
 class GUI:
     """
-    对视频、图片进行批量裁剪的主窗体类。鼠标功能：拖动即可截取图片，拖动完毕切换到下一张。
+    对视频、图片进行批量裁剪的主窗体类。
+    鼠标功能：<bold>添加</bold>标注图片。拖动截选区域后输入对应的车牌号，可以标记车牌。
     键盘功能：
-    1：视频剪辑状态下，跳过一秒后读取一帧。图片裁剪状态下跳到下一张图片
-    2：视频剪辑状态下，跳过二秒后读取一帧。图片裁剪状态下跳到下两张图片
-    3-9同理。0代表10，Enter代表30
-    Space：同一张图片可多拖拽截取一次
+    数字1-9：视频剪辑状态下，跳过n秒后读取一帧。图片裁剪状态下跳到下n张图片（0代表10）
+    Enter：<bold>修改</bold>当前已标的车牌数据
+    Delete：<bold>删除</bold>当前的所有标记
+    Space：<bold>保存</bold>截取的图片，并按下1键
     -：逆向跳转，可读取之前的帧，跳转幅度取反（只适用于视频模式）
     a：增加跳转幅度（每次跳过的秒数要乘跳转幅度，只适用于视频模式）
     d：减小跳转幅度（每次跳过的秒数要乘跳转幅度，只适用于视频模式）
     """
     __slots__ = (
-        'videoStream', 'staticText', 'root', 'canvas', 'database', 'X', 'Y', 'selectPosition', 'LPCountInPicture',
-        '偏移系数', 'baseFrame', 'baseTkImg', 'draging', 'boxesAndLabels')
+        'videoStream', 'staticText', 'root', 'canvas', 'X', 'Y', 'selectPosition', '偏移系数', 'baseFrame', 'baseTkImg',
+        'draging', 'boxesAndLabels', 'rectanglesAndLabels')
 
     def __init__(self, videoStream):
         # 初始化属性
@@ -108,58 +113,67 @@ class GUI:
         self.staticText = None
         # 初始化一般变量
         self.selectPosition = None
-        self.LPCountInPicture = 1
-        global lastDrawedRectangle, imageFiles, imageFilesIndex, saveRawFileName
-        lastDrawedRectangle = None
+        # self.LPCountInPicture = 1
+        global lastDragedRectangle, lastDrawedText, imageFiles, imageFilesIndex, saveRawFileName
+        lastDragedRectangle, lastDrawedText = None, None
         imageFiles = None
         imageFilesIndex = 0
         self.偏移系数 = 1
+        self.boxesAndLabels = []
+        self.rectanglesAndLabels = []
         # 创建主窗口
         self.root = tkinter.Tk()
         self.root.state("zoomed")
-        self.baseTkImg = self.frame2TkImage(self.readFrame())
+        self.baseFrame = self.readFrame()
+        self.baseTkImg = self.frame2TkImage(self.baseFrame)
         # 设定主窗口大小，绑定事件
         self.root.geometry(str(self.baseTkImg.width()) + 'x' + str(self.baseTkImg.height()))
-        self.root.bind('<Return>', self.enter_Press)  # enter键
-        self.root.bind('<Key>', self.key_Press)  # 数字键
-        self.root.bind('<space>', self.space_Press)  # 空格键
+        self.root.bind_all('<Return>', self.enter_Press)  # enter键
+        self.root.bind_all('<Key>', self.key_Press)  # 数字键
+        self.root.bind_all('<space>', self.space_Press)  # 空格键
+        self.root.bind_all('<Delete>',self.removeRectanglesAndLabels)#delete键清空
         self.root.resizable(False, False)
         self.title()  # 刷新界面标题
         # 创建canvas，绑定事件
         screenWidth = self.baseTkImg.width()  # root.winfo_screenwidth()
         screenHeight = self.baseTkImg.height()  # root.winfo_screenheight()
         self.canvas = tkinter.Canvas(self.root, bg='white', width=screenWidth, height=screenHeight)
-        self.canvas.pack()
-        self.canvas.create_image(0, 0, anchor='nw', image=self.baseTkImg)
-        self.canvas.bind('<Button-1>', self.leftMouse_Down)  # 鼠标左键
-        self.canvas.bind('<B1-Motion>', self.mouse_Drag)  # 鼠标拖动
-        self.canvas.bind('<ButtonRelease-1>', self.leftMouse_Up)  # 鼠标抬起
+        self.setCanvasImg(self.baseTkImg)
+        self.canvas.bind('<Button-1>', self.mouseDownLeft)  # 鼠标左键
+        self.canvas.bind('<B1-Motion>', self.mouseDrag)  # 鼠标拖动
+        self.canvas.bind('<ButtonRelease-1>', self.mouseUpLeft)  # 鼠标抬起
         self.canvas.place(x=0, y=0)  # pack(fill=tkinter.Y,expand=tkinter.YES)
+        self.canvas.pack()
         # 打开标记记录数据库
-        self.database = DbLite.OpenConnect()
+        DbLite.OpenConnect()
         # 初始化鼠标事件的位置容器
         self.X = tkinter.IntVar(value=0)
         self.Y = tkinter.IntVar(value=0)
         # 分配合理的存储文件名
-        if len(os.listdir(args.save_dir)) is not 0:
-            savedjpgs = os.listdir(args.save_dir)
-            savedjpgs.sort()
-            try:
-                saveRawFileName = int(savedjpgs[-1].split('.')[0]) + 1
-            except ValueError as e:
-                saveRawFileName = 1
-        else:
-            saveRawFileName = 1
+        # if len(os.listdir(args.save_dir)) is not 0:
+        #     savedjpgs = os.listdir(args.save_dir)
+        #     savedjpgs.sort()
+        #     try:
+        #         saveRawFileName = int(savedjpgs[-1].split('.')[0]) + 1
+        #     except ValueError as e:
+        #         saveRawFileName = 1
+        # else:
+        #     saveRawFileName = 1
         # 加载第一张图片
-        if self.isImageDirMode():
-            self.loadNextFrame(0)
-        elif self.isVideoMode():
-            self.loadNextFrame()
+        # if self.isImageDirMode():
+        #     self.loadNextFrame(0)
+        # elif self.isVideoMode():
+        #     self.loadNextFrame()
+
+    def on_closing(self):
+        DbLite.close()
+        self.root.quit()
 
     def showDialog(self):
         """
         启动消息主循环
         """
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.mainloop()
 
     # region 工具函数
@@ -254,15 +268,32 @@ class GUI:
             imageFilesIndex += 1
             return frame
 
+    def removeRectangleAndLabelAt(self, removeIndex=-1, removeRectangle=False, removeLabel=False):
+        if removeRectangle:
+            lastDrawedRectangle = self.rectanglesAndLabels[removeIndex][0]
+            self.canvas.delete(lastDrawedRectangle)
+        if removeLabel:
+            lastDrawedText = self.rectanglesAndLabels[removeIndex][1]
+            self.canvas.delete(lastDrawedText)
+
+    def removeRectanglesAndLabels(self,event=None):
+        for rectangleLabel in self.rectanglesAndLabels:
+            self.canvas.delete(rectangleLabel[0])
+            self.canvas.delete(rectangleLabel[1])
+
     def refreshRectanglesAndLabels(self):
         # frame = self.baseFrame
+        self.removeRectanglesAndLabels()
+        self.rectanglesAndLabels = []
         for licensePlateDict in self.boxesAndLabels:
-            global lastDrawedRectangle
+            # global lastDrawedRectangle
             lastDrawedRectangle = self.canvas.create_rectangle(licensePlateDict['left'], licensePlateDict['top'],
                                                                licensePlateDict['right'], licensePlateDict['bottom'],
                                                                outline="red")
-            self.canvas.create_text(licensePlateDict['left'] + 37, licensePlateDict['top'] - 10,
-                                    text=licensePlateDict['label'], font=('宋体', 15), fill='red')
+            # global lastDrawedText
+            lastDrawedText = self.canvas.create_text(licensePlateDict['left'] + 37, licensePlateDict['top'] - 10,
+                                                     text=licensePlateDict['label'], font=('宋体', 15), fill='red')
+            self.rectanglesAndLabels += [(lastDrawedRectangle, lastDrawedText)]
             # frame = self.cv2ImgAddText(frame, licensePlateDict['label'],
             #                            (licensePlateDict['left'], licensePlateDict['top'] - 12),
             #                            textColor=(255, 255, 0), textSize=15)
@@ -285,10 +316,12 @@ class GUI:
             global imageFilesIndex
             imageFilesIndex += skipSteps - 1  # 标记完索引已自动跳到下一张
             self.baseFrame = self.readFrame()
-
+        self.baseTkImg = self.frame2TkImage(self.baseFrame)
         # self.baseTkImg = self.frame2TkImage(self.baseFrame) # 加上这句就会全屏空白，原因见函数内！
-        # 开始检测车牌号
-        self.boxesAndLabels = LPDetector.getBoxesAndLabels(self.baseFrame, 1, (50, 15), None)
+        self.setCanvasImg(self.baseTkImg)
+        if args.enable_smart_tool is 1:
+            # 开始检测车牌号
+            self.boxesAndLabels = LPDetector.getBoxesAndLabels(self.baseFrame, 1, (50, 15), None)
         self.refreshRectanglesAndLabels()
 
     # endregion
@@ -311,10 +344,10 @@ class GUI:
             if event.char is '-':
                 self.偏移系数 *= -1
                 self.title(staticText='倍率=' + str(self.偏移系数))
-            elif event.char is 'a':
+            elif event.char is 'a' or event.char is 'A':
                 self.偏移系数 *= 2
                 self.title(staticText='倍率=' + str(self.偏移系数))
-            elif event.char is 'd':
+            elif event.char is 'd' or event.char is 'D':
                 self.偏移系数 /= 2
                 self.title(staticText='倍率=' + str(self.偏移系数))
 
@@ -327,7 +360,26 @@ class GUI:
         Returns:
 
         """
-        self.loadNextFrame(30)
+        changeIndex = 0
+        if len(self.boxesAndLabels) > 1:
+            help = ''
+            for dict in self.boxesAndLabels:
+                label = dict['label']
+                help += label + ': ' + str(changeIndex) + ', '
+                changeIndex += 1
+            help = help[:-2]
+            input = inputbox('要修改的对应数字:', help)
+            if input is '':
+                return
+            changeIndex = int(input)
+        input = inputbox('车牌号修改为:')
+        if input is '':
+            return
+        self.removeRectangleAndLabelAt(removeIndex=changeIndex, removeLabel=True)
+        self.boxesAndLabels[changeIndex]['label'] = input
+        # self.removeRectanglesAndLabels()
+        self.refreshRectanglesAndLabels()
+        # self.loadNextFrame(30)
 
     def space_Press(self, event):
         """
@@ -338,13 +390,15 @@ class GUI:
         Returns:
 
         """
-        self.LPCountInPicture += 1
+        self.cutSavePicture()
+        self.loadNextFrame()
+        # self.LPCountInPicture += 1
 
     # endregion
 
     # region 鼠标事件
     # 鼠标左键按下的位置
-    def leftMouse_Down(self, event):
+    def mouseDownLeft(self, event):
         """
         鼠标左键KeyDown事件
         Args:
@@ -359,7 +413,7 @@ class GUI:
         self.draging = True
 
     # 鼠标左键移动，显示选取的区域
-    def mouse_Drag(self, event):
+    def mouseDrag(self, event):
         """
         鼠标左键拖拽事件
         Args:
@@ -370,17 +424,17 @@ class GUI:
         """
         if not self.draging:
             return
-        global lastDrawedRectangle
+        global lastDragedRectangle
         try:
             # 删除刚画完的图形，否则鼠标移动的时候是黑乎乎的一片矩形
-            self.canvas.delete(lastDrawedRectangle)
+            self.canvas.delete(lastDragedRectangle)
         except Exception as e:
             pass
-        lastDrawedRectangle = self.canvas.create_rectangle(self.X.get(), self.Y.get(), event.x, event.y,
+        lastDragedRectangle = self.canvas.create_rectangle(self.X.get(), self.Y.get(), event.x, event.y,
                                                            outline='yellow')
 
     # 获取鼠标左键抬起的位置，记录区域
-    def leftMouse_Up(self, event):
+    def mouseUpLeft(self, event):
         """
         鼠标左键KeyUp事件
         Args:
@@ -391,7 +445,7 @@ class GUI:
         """
         self.draging = False
         try:
-            self.canvas.delete(lastDrawedRectangle)
+            self.canvas.delete(lastDragedRectangle)
         except Exception as e:
             pass
         upx = event.x
@@ -408,36 +462,31 @@ class GUI:
             self.boxesAndLabels += [vehicle]
             print('已选中:', input)
         self.refreshRectanglesAndLabels()
-        self.cutPictureAndShow()
 
     # endregion
 
     # region 裁剪与储存
-    def cutPictureAndShow(self) -> None:
+    def cutSavePicture(self) -> None:
         """
         裁剪图片，保存，并显示
         Returns:
 
         """
-        left, right, top, bottom = [x for x in self.selectPosition]
-        global saveRawFileName
-        saveFullFileName = args.save_dir + str(saveRawFileName) + '.jpg'
-        GUI.cutImwrite(saveFullFileName, self.baseFrame, left, right, top, bottom)
-        if self.isImageDirMode():
-            self.database.append(imageFiles[imageFilesIndex], saveFullFileName, left, right, top, bottom)
-        elif self.isImageMode():
-            self.database.append(args.image, saveFullFileName, left, right, top, bottom)
-        elif self.isVideoMode():
-            self.database.append('', saveFullFileName, left, right, top, bottom)
-        saveRawFileName += 1
-        print(saveFullFileName, '已保存')
-        self.title(saveFullFileName + ' 已保存')
-        if self.isImageMode():
-            return
-        if self.LPCountInPicture is 1:
-            self.loadNextFrame()
-        else:
-            self.LPCountInPicture -= 1
+        for dict in self.boxesAndLabels:
+            left, right, top, bottom = dict['left'], dict['right'], dict['top'], dict['bottom']
+            saveFullFileName, _ = LPDetector.getInconflictFileName(args.save_dir + dict['label'] + '.jpg')
+            GUI.cutImwrite(saveFullFileName, self.baseFrame, left, right, top, bottom)
+            if self.isImageDirMode():
+                DbLite.append(imageFiles[imageFilesIndex], saveFullFileName, left, right, top, bottom)
+            elif self.isImageMode():
+                DbLite.append(args.image, saveFullFileName, left, right, top, bottom)
+            elif self.isVideoMode():
+                DbLite.append('', saveFullFileName, left, right, top, bottom)
+            print(saveFullFileName, '已保存')
+            self.title(saveFullFileName + ' 已保存')
+        # if self.isImageMode():
+        #     return
+        # self.loadNextFrame()
 
     @staticmethod
     def cutImwrite(savedFileName: str, image: np.ndarray, left: int, right: int, top: int, bottom: int):
