@@ -140,6 +140,7 @@ class GUI:
     """
     对视频、图片进行批量裁剪的主窗体类。
     鼠标功能：<bold>添加</bold>标注图片。拖动截选区域后输入对应的车牌号，可以标记车牌。
+    滚轮向下滚动作为1键的快捷方式，向上滚动与之相反
     键盘功能：
     数字1-9：视频剪辑状态下，跳过n秒后读取一帧。图片裁剪状态下跳到下n张图片（0代表10）
     Enter：<bold>修改</bold>当前已标的车牌数据
@@ -187,6 +188,7 @@ class GUI:
         self.root.bind_all('<Key>', self.keyPress)  # 数字键
         self.root.bind_all('<space>', self.spacePress)  # 空格键
         self.root.bind_all('<Delete>', self.removeRectanglesAndLabels)  # delete键清空
+        self.root.bind_all("<MouseWheel>", self.mouseWheel)
         self.root.resizable(False, False)
         self.title()  # 刷新界面标题
         # 创建canvas，绑定事件
@@ -303,11 +305,9 @@ class GUI:
 
         """
         if self.isVideoMode():
-            frame = VideoUtil.ReadFrame(self.videoStream)
-            return frame
+            return VideoUtil.ReadFrame(self.videoStream)
         elif self.isImageMode():
-            frame = Transformer.Imread(args.image)
-            return frame
+            return Transformer.Imread(args.image)
         elif self.isImageDirMode():
             global imageFiles, imageFilesIndex
             if imageFiles is None:
@@ -382,6 +382,11 @@ class GUI:
             global imageFilesIndex
             imageFilesIndex += skipSteps - 1  # 标记完索引已自动跳到下一张
             self.baseFrame = self.readFrame()
+        # 判断是否读取结束
+        if self.baseFrame is None:
+            self.root.destroy()
+            self.root.quit()
+            return
         # 转换为TkImage格式后放置到canvas画板上
         self.baseTkImg = self.frame2TkImage(self.baseFrame)
         self.setCanvasImg(self.baseTkImg)
@@ -513,6 +518,17 @@ class GUI:
         self.boxesAndLabels += [vehicle]
         print('已录入车牌号：' + inputStr)
         self.drawRectanglesAndLabels()  # 画图和标文字
+
+    def mouseWheel(self, event):
+        """
+        滚轮滚动操作。向下滚动作为按键1的快捷方式，向上滚动与之相反
+        Args:
+            event:
+        """
+        if event.delta > 0:
+            self.loadNextFrame(-1)
+        else:
+            self.loadNextFrame(1)
 
     # endregion
 

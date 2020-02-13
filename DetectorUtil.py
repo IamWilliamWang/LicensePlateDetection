@@ -72,7 +72,8 @@ class VideoUtil:
 
     @staticmethod
     def ReadFrame(stream) -> numpy.ndarray:
-        return numpy.asarray(VideoUtil.ReadFrames(stream, 1)[0])
+        read = VideoUtil.ReadFrames(stream, 1)
+        return numpy.asarray(read[0]) if read is not None else None
 
     @staticmethod
     def SkipReadFrames(stream, skippedFramesCount: int) -> None:
