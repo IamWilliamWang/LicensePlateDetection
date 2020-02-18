@@ -13,12 +13,16 @@ from DetectorUtil import VideoUtil
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='智能车牌数据标注器')
-    parser.add_argument('-savedir', '--save_dir', type=str, help='截取后所保存的文件夹', default='dataset/')
+    parser.add_argument('-folder', '--save_folder', type=str, help='截取后所保存的文件夹', default='dataset/')
     parser.add_argument('-v', '--video', type=str, help='视频文件名', default=None)
     parser.add_argument('-dir', '--image_dir', type=str, help='存放照片的文件夹名', default=None)
     parser.add_argument('-img', '--image', type=str, help='单个图片的文件名', default=None)
     parser.add_argument('-smart', '--enable_smart_tool', type=int, help='开启自动标注插件，识别出车牌会自动提前标注', default=1)
+    parser.add_argument('-detail', '--show_file_detail', type=int, help='标题栏显示当前文件名', default=0)
     args = parser.parse_args()
+    args.save_folder = args.save_folder.replace('\"', '')
+    if args.save_folder[-1] is not '/' and args.save_folder[-1] is not '\\':
+        args.save_folder += '/'
 
 
 # region 数据库
@@ -26,11 +30,11 @@ class DbLite:
     fp = None
 
     @staticmethod
-    def OpenConnect():
+    def open():
         """
         打开数据库。用于存储GUI.boxesAndLabels
         """
-        DbLite.databaseName = args.save_dir + 'database.csv'
+        DbLite.databaseName = args.save_folder + 'database.csv'
         if os.path.exists(DbLite.databaseName):
             DbLite.fp = open(DbLite.databaseName, 'a')
         else:
@@ -165,7 +169,7 @@ class GUI:
         'rectanglesAndLabels'  # 储存当前画面中各个方框和添加的文字信息的元组列表[(rectangle, text)]
     )
 
-    def __init__(self, videoStream):
+    def __init__(self, videoStream: cv2.VideoCapture):
         # 初始化属性
         self.videoStream = videoStream
         self.staticText = None
@@ -202,7 +206,7 @@ class GUI:
         self.canvas.place(x=0, y=0)  # pack(fill=tkinter.Y,expand=tkinter.YES)
         self.canvas.pack()
         # 打开标记记录数据库
-        DbLite.OpenConnect()
+        DbLite.open()
         # 初始化鼠标事件的位置容器
         self.X = tkinter.IntVar(value=0)
         self.Y = tkinter.IntVar(value=0)
@@ -377,11 +381,20 @@ class GUI:
         if self.isVideoMode():
             VideoUtil.SkipReadFrames(self.videoStream, VideoUtil.GetFps(self.videoStream) * skipSteps * self.偏移系数)
             self.baseFrame = self.readFrame()
+            if args.show_file_detail is 1:
+                self.title(args.video + ' ' + str(VideoUtil.GetPosition(self.videoStream)) + '/' + str(
+                    VideoUtil.GetVideoFileFrameCount(self.videoStream)))
         # 文件夹模式
-        else:
+        elif self.isImageDirMode():
             global imageFilesIndex
             imageFilesIndex += skipSteps - 1  # 标记完索引已自动跳到下一张
             self.baseFrame = self.readFrame()
+            if args.show_file_detail is 1:
+                self.title(imageFiles[imageFilesIndex])
+        else:
+            self.baseFrame = self.readFrame()
+            if args.show_file_detail is 1:
+                self.title(args.image)
         # 判断是否读取结束
         if self.baseFrame is None:
             self.root.destroy()
@@ -539,7 +552,7 @@ class GUI:
         """
         for dict in self.boxesAndLabels:
             left, right, top, bottom = dict['left'], dict['right'], dict['top'], dict['bottom']
-            saveFullFileName, _ = LPDetector.getInconflictFileName(args.save_dir + dict['label'] + '.jpg')
+            saveFullFileName, _ = LPDetector.getInconflictFileName(args.save_folder + dict['label'] + '.jpg')
             GUI.cutImwrite(saveFullFileName, self.baseFrame, left, right, top, bottom)
             if self.isImageDirMode():
                 DbLite.append(imageFiles[imageFilesIndex], saveFullFileName, left, right, top, bottom)

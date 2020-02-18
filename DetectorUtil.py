@@ -27,7 +27,7 @@ class VideoUtil:
         return videoInput, videoOutput
 
     @staticmethod
-    def OpenInputVideo(inputVideoSource) -> cv2.VideoCapture:
+    def OpenInputVideo(inputVideoSource: str) -> cv2.VideoCapture:
         '''
         打开输入视频文件
         :param inputVideoSource: 输入文件名或视频流
@@ -36,7 +36,8 @@ class VideoUtil:
         return cv2.VideoCapture(inputVideoSource)
 
     @staticmethod
-    def OpenOutputVideo(outputVideoFilename, inputFileStream, outputVideoEncoding='DIVX') -> cv2.VideoWriter:
+    def OpenOutputVideo(outputVideoFilename: str, inputFileStream: cv2.VideoCapture,
+                        outputVideoEncoding='DIVX') -> cv2.VideoWriter:
         '''
         打开输出视频文件
         :param outputVideoFilename: 输出文件名
@@ -51,7 +52,7 @@ class VideoUtil:
         return cv2.VideoWriter(outputVideoFilename, cv2.VideoWriter_fourcc(*outputVideoEncoding), fps, size, False)
 
     @staticmethod
-    def ReadFrames(stream, readFramesCount) -> list:
+    def ReadFrames(stream: cv2.VideoCapture, readFramesCount: int) -> list:
         '''
         从输入流中读取最多readFramesCount个帧并返回，如果没有读取则返回None
         :param stream: 输入流
@@ -71,20 +72,65 @@ class VideoUtil:
         return frames
 
     @staticmethod
-    def ReadFrame(stream) -> numpy.ndarray:
+    def ReadFrame(stream: cv2.VideoCapture) -> numpy.ndarray:
+        """
+        从输入流中读取一帧
+        Args:
+            stream:
+
+        Returns:
+
+        """
         read = VideoUtil.ReadFrames(stream, 1)
         return numpy.asarray(read[0]) if read is not None else None
 
     @staticmethod
-    def SkipReadFrames(stream, skippedFramesCount: int) -> None:
-        stream.set(cv2.CAP_PROP_POS_FRAMES, stream.get(cv2.CAP_PROP_POS_FRAMES) + skippedFramesCount)
+    def WriteFrame(stream: cv2.VideoWriter, frame: numpy.ndarray) -> None:
+        """
+        向输出流写入一帧
+        Args:
+            stream:
+            frame:
 
-    @staticmethod
-    def WriteFrame(stream, frame) -> None:
+        Returns:
+
+        """
         stream.write(frame)
 
     @staticmethod
-    def GetFps(videoStream) -> int:
+    def GetPosition(stream: cv2.VideoCapture) -> int:
+        """
+        获得视频输入流的当前帧位置
+        Args:
+            stream:
+
+        Returns:
+
+        """
+        return stream.get(cv2.CAP_PROP_POS_FRAMES)
+
+    @staticmethod
+    def SetPosition(stream: cv2.VideoCapture, framesPosition: int):
+        """
+        设置视频输入流的当前帧位置
+        Args:
+            stream:
+            framesPosition:
+        """
+        stream.set(cv2.CAP_PROP_POS_FRAMES, framesPosition)
+
+    @staticmethod
+    def SkipReadFrames(stream: cv2.VideoCapture, skippedFramesCount: int) -> None:
+        """
+        将输入流的指针挪后几帧
+        Args:
+            stream:
+            skippedFramesCount:
+        """
+        VideoUtil.SetPosition(stream, VideoUtil.GetPosition(stream) + skippedFramesCount)
+
+    @staticmethod
+    def GetFps(videoStream: cv2.VideoCapture) -> int:
         '''
         获得视频流的FPS
         :param videoStream: 视频输入流
@@ -93,7 +139,7 @@ class VideoUtil:
         return int(videoStream.get(cv2.CAP_PROP_FPS))
 
     @staticmethod
-    def GetVideoFileFrameCount(videoFileStream) -> int:
+    def GetVideoFileFrameCount(videoFileStream: cv2.VideoCapture) -> int:
         '''
         获得视频文件的总帧数
         :param videoFileStream: 视频文件流
@@ -102,7 +148,7 @@ class VideoUtil:
         return videoFileStream.get(cv2.CAP_PROP_FRAME_COUNT)
 
     @staticmethod
-    def GetWidthAndHeight(videoStream) -> tuple([int, int]):
+    def GetWidthAndHeight(videoStream: cv2.VideoCapture) -> tuple([int, int]):
         '''
         获得视频流的宽度和高度
         :param videoStream: 视频流
@@ -111,7 +157,7 @@ class VideoUtil:
         return int(videoStream.get(cv2.CAP_PROP_FRAME_WIDTH)), int(videoStream.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     @staticmethod
-    def CloseVideos(*videoStreams) -> None:
+    def CloseVideos(*videoStreams: cv2.VideoCapture) -> None:
         '''
         关闭所有视频文件
         :param videoStreams: 所有视频的文件流
