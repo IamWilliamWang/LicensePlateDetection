@@ -29,7 +29,8 @@ def move_files():
         for sourceFile in selectedFiles:
             if re.compile(regex).match(sourceFile):
                 targetFile, _ = getInconflictFileName(os.path.join(toDir, sourceFile))
-                os.rename(os.path.join(fromDir, sourceFile), targetFile)
+                os.system(
+                    'move "$1" "$2" >nul'.replace('$1', os.path.join(fromDir, sourceFile)).replace('$2', targetFile))
                 print('已移动 ' + os.path.join(fromDir, sourceFile) + ' 到 ' + targetFile)
 
 
