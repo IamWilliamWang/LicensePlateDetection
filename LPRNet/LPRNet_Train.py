@@ -45,15 +45,30 @@ if __name__ == '__main__':
     parser.add_argument('--img_dirs_val', default="./data/validation", help='the validation images path')
     parser.add_argument('--dropout_rate', default=0.5, help='dropout rate.')
     parser.add_argument('--epoch', type=int, default=33, help='number of epoches for training')
-    parser.add_argument('--batch_size', default=128, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=128, help='batch size')
     args = parser.parse_args()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
     lprnet = LPRNet(class_num=len(CHARS), dropout_rate=args.dropout_rate)
     lprnet.to(device)
-    lprnet.load_state_dict(torch.load('weights/LPRNet_model_Init.pth', map_location=lambda storage, loc: storage))
-    print("LPRNet loaded")
-    
+    # load pretrained model
+    # lprnet.load_state_dict(torch.load('weights/LPRNet_model_Init.pth', map_location=lambda storage, loc: storage))
+    # print("LPRNet loaded")
+    def xavier(param):
+        nn.init.xavier_uniform(param)
+    def weights_init(m):
+        for key in m.state_dict():
+            if key.split('.')[-1] == 'weight':
+                if 'conv' in key:
+                    nn.init.kaiming_normal_(m.state_dict()[key], mode='fan_out')
+                if 'bn' in key:
+                    m.state_dict()[key][...] = xavier(1)
+            elif key.split('.')[-1] == 'bias':
+                m.state_dict()[key][...] = 0.01
+    lprnet.backbone.apply(weights_init)
+    lprnet.container.apply(weights_init)
+    print("initial net weights successful!")
+
     STN = STNet()
     STN.to(device)
     STN.load_state_dict(torch.load('weights/STN_model_Init.pth', map_location=lambda storage, loc: storage))

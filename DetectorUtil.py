@@ -184,6 +184,12 @@ class Transformer:
 
     @staticmethod
     def Imwrite(filename_unicode: str, frame) -> None:
+        """
+        向文件写入该帧
+        Args:
+            filename_unicode: unicode文件名
+            frame: 该帧
+        """
         extension = filename_unicode[filename_unicode.rfind('.'):]
         cv2.imencode(extension, frame)[1].tofile(filename_unicode)
 

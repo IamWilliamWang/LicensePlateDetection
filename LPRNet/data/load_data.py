@@ -9,14 +9,24 @@ import os
 CHARS = ['京', '沪', '津', '渝', '冀', '晋', '蒙', '辽', '吉', '黑',
          '苏', '浙', '皖', '闽', '赣', '鲁', '豫', '鄂', '湘', '粤',
          '桂', '琼', '川', '贵', '云', '藏', '陕', '甘', '青', '宁',
-         '新', 
+         '新', '厂', '内',
          '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
          'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K',
          'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
-         'W', 'X', 'Y', 'Z', 'I', 'O', '-'
+         'W', 'X', 'Y', 'Z', 'I', 'O', '-', '警'
          ]
 
-CHARS_DICT = {char:i for i, char in enumerate(CHARS)}
+CHARS_DICT = {char: i for i, char in enumerate(CHARS)}
+
+
+def Imread(filename_unicode: str) -> np.ndarray:
+    '''
+    读取含有unicode文件名的图片
+    :param filename_unicode: 含有unicode的图片名
+    :return:
+    '''
+    return cv2.imdecode(np.fromfile(filename_unicode, dtype=np.uint8), -1)
+
 
 class LPRDataLoader(Dataset):
     def __init__(self, img_dir, imgSize, PreprocFun=None):
@@ -37,20 +47,21 @@ class LPRDataLoader(Dataset):
 
     def __getitem__(self, index):
         filename = self.img_paths[index]
-        Image = cv2.imread(filename)
+        # Image = cv2.imread(filename)
+        Image = Imread(filename)
         height, width, _ = Image.shape
         if height != self.img_size[1] or width != self.img_size[0]:
-            Image = cv2.resize(Image, self.img_size)
+            Image = cv2.resize(Image, tuple(self.img_size))
         Image = self.PreprocFun(Image)
 
         basename = os.path.basename(filename)
         imgname, suffix = os.path.splitext(basename)
-        imgname = imgname.split("-")[0].split("_")[0]
+        imgname = imgname.split("-")[0].split("_")[0].split(' (')[0]  # 去除(2) (3)等等
         label = list()
         for c in imgname:
             label.append(CHARS_DICT[c])
 
-        if len(label) == 8:
+        if len(label) > 8:
             if self.check(label) == False:
                 print(imgname)
                 assert 0, "Error label ^~^!!!"
@@ -72,7 +83,8 @@ class LPRDataLoader(Dataset):
             return False
         else:
             return True
-        
+
+
 def collate_fn(batch):
     imgs = []
     labels = []
@@ -85,15 +97,15 @@ def collate_fn(batch):
     labels = np.asarray(labels).flatten().astype(np.float32)
 
     return (torch.stack(imgs, 0), torch.from_numpy(labels), lengths)
-        
+
+
 if __name__ == "__main__":
-    
-    dataset = LPRDataLoader(['validation'], (94, 24))   
+
+    dataset = LPRDataLoader(['validation'], (94, 24))
     dataloader = DataLoader(dataset, batch_size=128, shuffle=False, num_workers=2, collate_fn=collate_fn)
     print('data length is {}'.format(len(dataset)))
     for imgs, labels, lengths in dataloader:
         print('image batch shape is', imgs.shape)
         print('label batch shape is', labels.shape)
-        print('label length is', len(lengths))      
+        print('label length is', len(lengths))
         break
-    
