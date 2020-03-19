@@ -13,18 +13,31 @@ from DetectorUtil import VideoUtil
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='智能车牌数据标注器 v2.2')
-    parser.add_argument('-folder', '--save_folder', type=str, help='将裁好的数据库保存在哪个文件夹。对应模式：不限',
-                        default='dataset/')  # 输出文件夹设置
     parser.add_argument('-v', '--video', type=str, help='想打开的视频文件名。对应模式：视频模式', default=None)  # 视频模式
     parser.add_argument('-dir', '--image_dir', type=str, help='储存原始照片的文件夹名。对应模式：图片文件夹模式', default=None)  # 图片文件夹模式
     parser.add_argument('-img', '--image', type=str, help='单个图片的文件名。对应模式：图片模式', default=None)  # 图片模式
-    parser.add_argument('-smart', '--enable_smart_tool', action='store_true',
-                        help='开启自动标注插件，每张图会自动识别出车牌后提前标注。对应模式：不限')  # 自助标注LPRNet插件
-    parser.add_argument('-detail', '--show_file_detail', action='store_true',
-                        help='标题栏显示当前操作的图片文件名。对应模式：不限')  # 文件名实时输出（用于调试）
+    parser.add_argument('-folder', '--save_folder', type=str, help='将裁好的数据库保存在哪个文件夹。对应模式：不限',
+                        default='dataset/')  # 输出文件夹设置
     parser.add_argument('-crop', '--crop_mode', action='store_true',
                         help='打开裁剪模式，只裁剪图片而不变文件名。对应模式：图片文件夹模式')  # 图片文件夹-裁剪模式（与2.0以前版本相似）
+    parser.add_argument('-detail', '--show_file_detail', action='store_true',
+                        help='标题栏显示当前操作的图片文件名。对应模式：不限')  # 文件名实时输出（用于调试）
+    parser.add_argument('-info', '--information', action='store_true', help='显示使用说明')
+    parser.add_argument('-smart', '--enable_smart_tool', action='store_true',
+                        help='开启自动标注插件，每张图会自动识别出车牌后提前标注。对应模式：不限')  # 自助标注LPRNet插件
     args = parser.parse_args()
+    if args.information:
+        print("鼠标功能：添加标注图片。拖动截选区域后输入对应的车牌号，可以标记车牌。\n" +
+              "滚轮向下滚动作为1键的快捷方式，向上滚动与之相反\n" +
+              "键盘功能：\n" +
+              "数字1-9：视频剪辑状态下，跳过n秒后读取一帧。图片裁剪状态下跳到下n张图片（0代表10）\n" +
+              "Enter：修改当前已标的车牌数据\n" +
+              "Delete：删除当前的所有标记\n" +
+              "Space：保存截取的图片，并按下1键\n" +
+              "-：逆向跳转，可读取之前的帧，跳转幅度取反（只适用于视频模式）\n" +
+              "a：增加跳转幅度（每次跳过的秒数要乘跳转幅度，只适用于视频模式）\n" +
+              "d：减小跳转幅度（每次跳过的秒数要乘跳转幅度，只适用于视频模式）")
+        exit(0)
     args.save_folder = args.save_folder.replace('\"', '')
     if not os.path.exists(args.save_folder):
         os.makedirs(args.save_folder)
@@ -334,7 +347,10 @@ class GUI:
                 # self.imageFiles = [os.path.join(args.image_dir, filename) for filename in self.imageFiles]
                 self.imageFiles = self.getJPGs(args.image_dir)
             self.imageFilesIndex += 1  # 移到下一个图片，再读取
-            frame = Transformer.Imread(self.imageFiles[self.imageFilesIndex % len(self.imageFiles)])
+            if self.imageFilesIndex >= len(self.imageFiles):
+                self.imageFilesIndex %= len(self.imageFiles)
+                print('已读取所有的照片，已回到第一张！')
+            frame = Transformer.Imread(self.imageFiles[self.imageFilesIndex])
             return frame
 
     def removeRectangleAndLabelAt(self, removeIndex=-1, removeRectangle=False, removeLabel=False):
@@ -537,12 +553,12 @@ class GUI:
         mytop, mybottom = sorted([self._Y.get(), upy])
         vehicle = {'left': myleft, 'right': myright, 'top': mytop, 'bottom': mybottom}
         print('选择区域：left:%d top:%d right:%d bottom:%d' % (myleft, mytop, myright, mybottom))  # 对应image中坐标信息
-        if not args.crop_mode:
+        if args.crop_mode:
+            inputStr = os.path.basename(self.imageFiles[self.imageFilesIndex]).split('.')[0]
+        else:
             inputStr = inputbox('输入车辆车牌号')
             if inputStr is '':
                 return
-        else:
-            inputStr = os.path.basename(self.imageFiles[self.imageFilesIndex]).split('.')[0]
         vehicle['label'] = inputStr
         self.boxesAndLabels += [vehicle]
         print('已录入车牌号：' + inputStr)
