@@ -12,14 +12,18 @@ from DetectorUtil import Transformer
 from DetectorUtil import VideoUtil
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='智能车牌数据标注器')
-    parser.add_argument('-folder', '--save_folder', type=str, help='截取后所保存的文件夹', default='dataset/')
-    parser.add_argument('-v', '--video', type=str, help='视频文件名', default=None)
-    parser.add_argument('-dir', '--image_dir', type=str, help='原始照片的文件夹名', default=None)
-    parser.add_argument('-img', '--image', type=str, help='单个图片的文件名', default=None)
-    parser.add_argument('-smart', '--enable_smart_tool', type=int, help='开启自动标注插件，识别出车牌会自动提前标注', default=1)
-    parser.add_argument('-detail', '--show_file_detail', type=int, help='标题栏显示当前文件名', default=0)
-    parser.add_argument('-crop', '--crop_mode', type=int, help='打开裁剪模式(只能用于文件夹模式)', default=0)
+    parser = argparse.ArgumentParser(description='智能车牌数据标注器 v2.2')
+    parser.add_argument('-folder', '--save_folder', type=str, help='将裁好的数据库保存在哪个文件夹。对应模式：不限',
+                        default='dataset/')  # 输出文件夹设置
+    parser.add_argument('-v', '--video', type=str, help='想打开的视频文件名。对应模式：视频模式', default=None)  # 视频模式
+    parser.add_argument('-dir', '--image_dir', type=str, help='储存原始照片的文件夹名。对应模式：图片文件夹模式', default=None)  # 图片文件夹模式
+    parser.add_argument('-img', '--image', type=str, help='单个图片的文件名。对应模式：图片模式', default=None)  # 图片模式
+    parser.add_argument('-smart', '--enable_smart_tool', action='store_true',
+                        help='开启自动标注插件，每张图会自动识别出车牌后提前标注。对应模式：不限')  # 自助标注LPRNet插件
+    parser.add_argument('-detail', '--show_file_detail', action='store_true',
+                        help='标题栏显示当前操作的图片文件名。对应模式：不限')  # 文件名实时输出（用于调试）
+    parser.add_argument('-crop', '--crop_mode', action='store_true',
+                        help='打开裁剪模式，只裁剪图片而不变文件名。对应模式：图片文件夹模式')  # 图片文件夹-裁剪模式（与2.0以前版本相似）
     args = parser.parse_args()
     args.save_folder = args.save_folder.replace('\"', '')
     if not os.path.exists(args.save_folder):
@@ -393,18 +397,18 @@ class GUI:
         if self.isVideoMode():
             VideoUtil.SkipReadFrames(self.videoStream, VideoUtil.GetFps(self.videoStream) * skipSteps * self._偏移系数)
             self.baseFrame = self.readFrame()
-            if args.show_file_detail is 1:
+            if args.show_file_detail:
                 self.title(args.video + ' ' + str(VideoUtil.GetPosition(self.videoStream)) + '/' + str(
                     VideoUtil.GetVideoFileFrameCount(self.videoStream)))
         # 文件夹模式
         elif self.isImageDirMode():
             self.imageFilesIndex += skipSteps - 1  # 因为readFrame读取前会imageFilesIndex++，所以skipSteps=1时无需操作
             self.baseFrame = self.readFrame()
-            if args.show_file_detail is 1:
+            if args.show_file_detail:
                 self.title(self.imageFiles[self.imageFilesIndex])
         else:
             self.baseFrame = self.readFrame()
-            if args.show_file_detail is 1:
+            if args.show_file_detail:
                 self.title(args.image)
         # 判断是否读取结束
         if self.baseFrame is None:
@@ -414,7 +418,7 @@ class GUI:
         # 转换为TkImage格式后放置到canvas画板上
         self._baseTkImg = self.frame2TkImage(self.baseFrame)
         self.setCanvasImg(self._baseTkImg)
-        if args.enable_smart_tool is 1:  # 开始检测新图像的车牌号
+        if args.enable_smart_tool:  # 开始检测新图像的车牌号
             self.boxesAndLabels = LPDetector.getBoxesAndLabels(self.baseFrame, 1, (50, 15), None)
         else:  # 禁止自动标注，则初始化为空的
             self.boxesAndLabels = []
@@ -533,7 +537,7 @@ class GUI:
         mytop, mybottom = sorted([self._Y.get(), upy])
         vehicle = {'left': myleft, 'right': myright, 'top': mytop, 'bottom': mybottom}
         print('选择区域：left:%d top:%d right:%d bottom:%d' % (myleft, mytop, myright, mybottom))  # 对应image中坐标信息
-        if args.crop_mode is 0:
+        if not args.crop_mode:
             inputStr = inputbox('输入车辆车牌号')
             if inputStr is '':
                 return
@@ -543,7 +547,7 @@ class GUI:
         self.boxesAndLabels += [vehicle]
         print('已录入车牌号：' + inputStr)
         self.drawRectanglesAndLabels()  # 画图和标文字
-        if args.crop_mode is not 0:
+        if args.crop_mode:
             self.spacePress(event)
 
     def mouseWheel(self, event):
