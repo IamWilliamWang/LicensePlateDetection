@@ -214,16 +214,16 @@ class GUI:
         self.root.bind_all('<space>', self.spacePress)  # 空格键
         self.root.bind_all('<Delete>', self.removeRectanglesAndLabels)  # delete键清空
         self.root.bind_all("<MouseWheel>", self.mouseWheel)
-        self.root.resizable(False, False)
+        # self.root.resizable(False, False)
         self.title()  # 刷新界面标题
         # 创建canvas，绑定事件
         screenWidth = self._baseTkImg.width()  # root.winfo_screenwidth()
         screenHeight = self._baseTkImg.height()  # root.winfo_screenheight()
         self.canvas = tkinter.Canvas(self.root, bg='white', width=screenWidth, height=screenHeight)
         self.setCanvasImg(self._baseTkImg)
-        self.canvas.bind('<Button-1>', self.mouseDownLeft)  # 鼠标左键
-        self.canvas.bind('<B1-Motion>', self.mouseDrag)  # 鼠标拖动
-        self.canvas.bind('<ButtonRelease-1>', self.mouseUpLeft)  # 鼠标抬起
+        self.canvas.bind_all('<Button-1>', self.mouseDownLeft)  # 鼠标左键
+        self.canvas.bind_all('<B1-Motion>', self.mouseDrag)  # 鼠标拖动
+        self.canvas.bind_all('<ButtonRelease-1>', self.mouseUpLeft)  # 鼠标抬起
         self.canvas.place(x=0, y=0)  # pack(fill=tkinter.Y,expand=tkinter.YES)
         self.canvas.pack(fill='both', expand='yes')
         # 打开标记记录数据库
@@ -349,7 +349,8 @@ class GUI:
             self.imageFilesIndex += 1  # 移到下一个图片，再读取
             if self.imageFilesIndex >= len(self.imageFiles):
                 self.imageFilesIndex %= len(self.imageFiles)
-                print('已读取所有的照片，已回到第一张！')
+                print('已读取完所有的照片，已回到第一张！')
+                tkinter.messagebox.showinfo('提示', '已读取所有的照片，已回到第一张！')
             frame = Transformer.Imread(self.imageFiles[self.imageFilesIndex])
             return frame
 
