@@ -31,7 +31,7 @@ for root, dirs, files in os.walk(targetDir):
         fullfilename = os.path.join(root, filename)
         image = Imread(fullfilename)
         img_crop = cv2.resize(image, (94, 24), interpolation=cv2.INTER_LINEAR)
-        if os.path.exists(os.path.join(root, 'crop')) is False:
-            os.makedirs(os.path.join(root, 'crop'))
-        print('正在写入', os.path.join(root, 'crop', filename))
-        Imwrite(os.path.join(root, 'crop', filename), img_crop)
+        if os.path.exists(os.path.join(root, 'resize')) is False:
+            os.makedirs(os.path.join(root, 'resize'))
+        print('正在写入', os.path.join(root, 'resize', filename))
+        Imwrite(os.path.join(root, 'resize', filename), img_crop)

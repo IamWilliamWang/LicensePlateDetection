@@ -15,12 +15,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='智能车牌数据标注器')
     parser.add_argument('-folder', '--save_folder', type=str, help='截取后所保存的文件夹', default='dataset/')
     parser.add_argument('-v', '--video', type=str, help='视频文件名', default=None)
-    parser.add_argument('-dir', '--image_dir', type=str, help='存放照片的文件夹名', default=None)
+    parser.add_argument('-dir', '--image_dir', type=str, help='原始照片的文件夹名', default=None)
     parser.add_argument('-img', '--image', type=str, help='单个图片的文件名', default=None)
     parser.add_argument('-smart', '--enable_smart_tool', type=int, help='开启自动标注插件，识别出车牌会自动提前标注', default=1)
     parser.add_argument('-detail', '--show_file_detail', type=int, help='标题栏显示当前文件名', default=0)
+    parser.add_argument('-crop', '--crop_mode', type=int, help='打开裁剪模式(只能用于文件夹模式)', default=0)
     args = parser.parse_args()
     args.save_folder = args.save_folder.replace('\"', '')
+    if not os.path.exists(args.save_folder):
+        os.makedirs(args.save_folder)
     if args.save_folder[-1] is not '/' and args.save_folder[-1] is not '\\':
         args.save_folder += '/'
 
@@ -164,6 +167,7 @@ class GUI:
         'baseFrame',  # 读取视频或图片的原视帧
         'baseTkImg',  # TkImage格式的baseFrame
         'draging',  # 是否正在拖拽操作
+        'lastDragedRectangle', 'imageFiles', 'imageFilesIndex', 'saveRawFileName',
         # 以下二者一一对应，len(boxesAndLabels) == len(rectanglesAndLabels)。对车牌进行处理的核心变量是boxesAndLabels
         'boxesAndLabels',  # 储存当前画面中各个车牌信息的字典列表[{'left': ,'right': ,'top': ,'bottom': ,'label': }]
         'rectanglesAndLabels'  # 储存当前画面中各个方框和添加的文字信息的元组列表[(rectangle, text)]
@@ -174,10 +178,9 @@ class GUI:
         self.videoStream = videoStream
         self.staticText = None
         # 初始化一般变量
-        global lastDragedRectangle, imageFiles, imageFilesIndex, saveRawFileName
-        lastDragedRectangle = None
-        imageFiles = None
-        imageFilesIndex = 0
+        self.lastDragedRectangle = None
+        self.imageFiles = None
+        self.imageFilesIndex = -1
         self.偏移系数 = 1
         self.boxesAndLabels = []
         self.rectanglesAndLabels = []
@@ -302,6 +305,14 @@ class GUI:
         """
         self.canvas.create_image(0, 0, anchor='nw', image=tkImage)
 
+    def getJPGs(self, dir):
+        jpgFullFileNames = []
+        for root, dirs, files in os.walk(args.image_dir):
+            for file in files:
+                if file.endswith('.jpg') or file.endswith('.JPG'):
+                    jpgFullFileNames += [os.path.join(root, file)]
+        return jpgFullFileNames
+
     def readFrame(self) -> np.ndarray:
         """
         无论当前为何种模式，读取一帧
@@ -313,12 +324,12 @@ class GUI:
         elif self.isImageMode():
             return Transformer.Imread(args.image)
         elif self.isImageDirMode():
-            global imageFiles, imageFilesIndex
-            if imageFiles is None:
-                imageFiles = os.listdir(args.image_dir)
-                imageFiles = [os.path.join(args.image_dir, filename) for filename in imageFiles]
-            frame = Transformer.Imread(imageFiles[imageFilesIndex % len(imageFiles)])
-            imageFilesIndex += 1
+            if self.imageFiles is None:  # 初始化imageFiles
+                # self.imageFiles = os.listdir(args.image_dir)
+                # self.imageFiles = [os.path.join(args.image_dir, filename) for filename in self.imageFiles]
+                self.imageFiles = self.getJPGs(args.image_dir)
+            self.imageFilesIndex += 1
+            frame = Transformer.Imread(self.imageFiles[self.imageFilesIndex % len(self.imageFiles)])
             return frame
 
     def removeRectangleAndLabelAt(self, removeIndex=-1, removeRectangle=False, removeLabel=False):
@@ -386,11 +397,10 @@ class GUI:
                     VideoUtil.GetVideoFileFrameCount(self.videoStream)))
         # 文件夹模式
         elif self.isImageDirMode():
-            global imageFilesIndex
-            imageFilesIndex += skipSteps - 1  # 标记完索引已自动跳到下一张
+            self.imageFilesIndex += skipSteps  # 标记完索引已自动跳到下一张
             self.baseFrame = self.readFrame()
             if args.show_file_detail is 1:
-                self.title(imageFiles[imageFilesIndex])
+                self.title(self.imageFiles[self.imageFilesIndex])
         else:
             self.baseFrame = self.readFrame()
             if args.show_file_detail is 1:
@@ -493,14 +503,13 @@ class GUI:
         """
         if not self.draging:
             return
-        global lastDragedRectangle
         try:
             # 删除刚画完的图形，否则鼠标移动的时候是黑乎乎的一片矩形
-            self.canvas.delete(lastDragedRectangle)
+            self.canvas.delete(self.lastDragedRectangle)
         except Exception as e:
             pass
-        lastDragedRectangle = self.canvas.create_rectangle(self.X.get(), self.Y.get(), event.x, event.y,
-                                                           outline='yellow')
+        self.lastDragedRectangle = self.canvas.create_rectangle(self.X.get(), self.Y.get(), event.x, event.y,
+                                                                outline='yellow')
 
     # 获取鼠标左键抬起的位置，记录区域
     def mouseUpLeft(self, event):
@@ -514,7 +523,7 @@ class GUI:
         """
         self.draging = False
         try:
-            self.canvas.delete(lastDragedRectangle)  # 删除拖拽时画的框
+            self.canvas.delete(self.lastDragedRectangle)  # 删除拖拽时画的框
         except Exception as e:
             pass
         upx = event.x
@@ -524,13 +533,18 @@ class GUI:
         vehicle = {'left': myleft, 'right': myright, 'top': mytop, 'bottom': mybottom}
         print("选择区域：xmin:" + str(myleft) + ' ymin:' + str(mytop) + ' xmax:' + str(myright) + ' ymax:' + str(
             mybottom))  # 对应image中坐标信息
-        inputStr = inputbox('输入车辆车牌号')
-        if inputStr is '':
-            return
+        if args.crop_mode is 0:
+            inputStr = inputbox('输入车辆车牌号')
+            if inputStr is '':
+                return
+        else:
+            inputStr = os.path.basename(self.imageFiles[self.imageFilesIndex]).split('.')[0]
         vehicle['label'] = inputStr
         self.boxesAndLabels += [vehicle]
         print('已录入车牌号：' + inputStr)
         self.drawRectanglesAndLabels()  # 画图和标文字
+        if args.crop_mode is not 0:
+            self.spacePress(event)
 
     def mouseWheel(self, event):
         """
@@ -555,7 +569,7 @@ class GUI:
             saveFullFileName, _ = LPDetector.getInconflictFileName(args.save_folder + dict['label'] + '.jpg')
             GUI.cutImwrite(saveFullFileName, self.baseFrame, left, right, top, bottom)
             if self.isImageDirMode():
-                DbLite.append(imageFiles[imageFilesIndex], saveFullFileName, left, right, top, bottom)
+                DbLite.append(self.imageFiles[self.imageFilesIndex], saveFullFileName, left, right, top, bottom)
             elif self.isImageMode():
                 DbLite.append(args.image, saveFullFileName, left, right, top, bottom)
             elif self.isVideoMode():
