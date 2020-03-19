@@ -159,15 +159,16 @@ class GUI:
     """
     __slots__ = (
         'videoStream',  # 传入的视频流
-        'staticText',  # 标题中要一直显示的文字
+        '_staticText',  # 标题中要一直显示的文字
         'root',  # 主窗口
         'canvas',  # 主画布
-        'X', 'Y',  # 储存鼠标选中时的坐标
-        '偏移系数',  # 读取下一帧需要跨越的秒数
+        '_X', '_Y',  # 储存鼠标选中时的坐标
+        '_偏移系数',  # 读取下一帧需要跨越的秒数
         'baseFrame',  # 读取视频或图片的原视帧
-        'baseTkImg',  # TkImage格式的baseFrame
-        'draging',  # 是否正在拖拽操作
-        'lastDragedRectangle', 'imageFiles', 'imageFilesIndex', 'saveRawFileName',
+        '_baseTkImg',  # TkImage格式的baseFrame
+        '_draging',  # 是否正在拖拽操作
+        '_lastDragedRectangle',  # 鼠标拖拽时屏幕显示的黄色方框
+        'imageFiles', 'imageFilesIndex',  # 文件夹模式下的文件列表和当前显示的图片索引
         # 以下二者一一对应，len(boxesAndLabels) == len(rectanglesAndLabels)。对车牌进行处理的核心变量是boxesAndLabels
         'boxesAndLabels',  # 储存当前画面中各个车牌信息的字典列表[{'left': ,'right': ,'top': ,'bottom': ,'label': }]
         'rectanglesAndLabels'  # 储存当前画面中各个方框和添加的文字信息的元组列表[(rectangle, text)]
@@ -176,21 +177,21 @@ class GUI:
     def __init__(self, videoStream: cv2.VideoCapture):
         # 初始化属性
         self.videoStream = videoStream
-        self.staticText = None
+        self._staticText = None
         # 初始化一般变量
-        self.lastDragedRectangle = None
+        self._lastDragedRectangle = None
         self.imageFiles = None
         self.imageFilesIndex = -1
-        self.偏移系数 = 1
+        self._偏移系数 = 1
         self.boxesAndLabels = []
         self.rectanglesAndLabels = []
         # 创建主窗口
         self.root = tkinter.Tk()
         self.root.state("zoomed")
         self.baseFrame = self.readFrame()
-        self.baseTkImg = self.frame2TkImage(self.baseFrame)
+        self._baseTkImg = self.frame2TkImage(self.baseFrame)
         # 设定主窗口大小，绑定事件
-        self.root.geometry(str(self.baseTkImg.width()) + 'x' + str(self.baseTkImg.height()))
+        self.root.geometry(str(self._baseTkImg.width()) + 'x' + str(self._baseTkImg.height()))
         self.root.bind_all('<Return>', self.enterPress)  # enter键
         self.root.bind_all('<Key>', self.keyPress)  # 数字键
         self.root.bind_all('<space>', self.spacePress)  # 空格键
@@ -199,20 +200,20 @@ class GUI:
         self.root.resizable(False, False)
         self.title()  # 刷新界面标题
         # 创建canvas，绑定事件
-        screenWidth = self.baseTkImg.width()  # root.winfo_screenwidth()
-        screenHeight = self.baseTkImg.height()  # root.winfo_screenheight()
+        screenWidth = self._baseTkImg.width()  # root.winfo_screenwidth()
+        screenHeight = self._baseTkImg.height()  # root.winfo_screenheight()
         self.canvas = tkinter.Canvas(self.root, bg='white', width=screenWidth, height=screenHeight)
-        self.setCanvasImg(self.baseTkImg)
+        self.setCanvasImg(self._baseTkImg)
         self.canvas.bind('<Button-1>', self.mouseDownLeft)  # 鼠标左键
         self.canvas.bind('<B1-Motion>', self.mouseDrag)  # 鼠标拖动
         self.canvas.bind('<ButtonRelease-1>', self.mouseUpLeft)  # 鼠标抬起
         self.canvas.place(x=0, y=0)  # pack(fill=tkinter.Y,expand=tkinter.YES)
-        self.canvas.pack()
+        self.canvas.pack(fill='both', expand='yes')
         # 打开标记记录数据库
         DbLite.open()
         # 初始化鼠标事件的位置容器
-        self.X = tkinter.IntVar(value=0)
-        self.Y = tkinter.IntVar(value=0)
+        self._X = tkinter.IntVar(value=0)
+        self._Y = tkinter.IntVar(value=0)
 
     def onClosing(self):
         """
@@ -274,10 +275,10 @@ class GUI:
             staticText: 需要一直在标题显示的内容
         """
         if staticText is not None:
-            self.staticText = staticText
+            self._staticText = staticText
         mTitle = '智能车牌数据标注器'
-        if self.staticText is not None:
-            mTitle += ' [' + self.staticText + ']'
+        if self._staticText is not None:
+            mTitle += ' [' + self._staticText + ']'
         if titleText is not None:
             mTitle += ' (' + titleText + ')'
         self.root.title(mTitle)
@@ -328,7 +329,7 @@ class GUI:
                 # self.imageFiles = os.listdir(args.image_dir)
                 # self.imageFiles = [os.path.join(args.image_dir, filename) for filename in self.imageFiles]
                 self.imageFiles = self.getJPGs(args.image_dir)
-            self.imageFilesIndex += 1
+            self.imageFilesIndex += 1  # 移到下一个图片，再读取
             frame = Transformer.Imread(self.imageFiles[self.imageFilesIndex % len(self.imageFiles)])
             return frame
 
@@ -390,14 +391,14 @@ class GUI:
         skipSteps = skipSteps if skipSteps is not None else 1
         # 视频模式
         if self.isVideoMode():
-            VideoUtil.SkipReadFrames(self.videoStream, VideoUtil.GetFps(self.videoStream) * skipSteps * self.偏移系数)
+            VideoUtil.SkipReadFrames(self.videoStream, VideoUtil.GetFps(self.videoStream) * skipSteps * self._偏移系数)
             self.baseFrame = self.readFrame()
             if args.show_file_detail is 1:
                 self.title(args.video + ' ' + str(VideoUtil.GetPosition(self.videoStream)) + '/' + str(
                     VideoUtil.GetVideoFileFrameCount(self.videoStream)))
         # 文件夹模式
         elif self.isImageDirMode():
-            self.imageFilesIndex += skipSteps  # 标记完索引已自动跳到下一张
+            self.imageFilesIndex += skipSteps - 1  # 因为readFrame读取前会imageFilesIndex++，所以skipSteps=1时无需操作
             self.baseFrame = self.readFrame()
             if args.show_file_detail is 1:
                 self.title(self.imageFiles[self.imageFilesIndex])
@@ -411,8 +412,8 @@ class GUI:
             self.root.quit()
             return
         # 转换为TkImage格式后放置到canvas画板上
-        self.baseTkImg = self.frame2TkImage(self.baseFrame)
-        self.setCanvasImg(self.baseTkImg)
+        self._baseTkImg = self.frame2TkImage(self.baseFrame)
+        self.setCanvasImg(self._baseTkImg)
         if args.enable_smart_tool is 1:  # 开始检测新图像的车牌号
             self.boxesAndLabels = LPDetector.getBoxesAndLabels(self.baseFrame, 1, (50, 15), None)
         else:  # 禁止自动标注，则初始化为空的
@@ -434,14 +435,14 @@ class GUI:
             self.loadNextFrame(10)
         elif self.isVideoMode():
             if event.char is '-':
-                self.偏移系数 *= -1
-                self.title(staticText='倍率=' + str(self.偏移系数))
+                self._偏移系数 *= -1
+                self.title(staticText='倍率=' + str(self._偏移系数))
             elif event.char is 'a' or event.char is 'A':
-                self.偏移系数 *= 2
-                self.title(staticText='倍率=' + str(self.偏移系数))
+                self._偏移系数 *= 2
+                self.title(staticText='倍率=' + str(self._偏移系数))
             elif event.char is 'd' or event.char is 'D':
-                self.偏移系数 /= 2
-                self.title(staticText='倍率=' + str(self.偏移系数))
+                self._偏移系数 /= 2
+                self.title(staticText='倍率=' + str(self._偏移系数))
 
     def enterPress(self, event):
         """
@@ -490,9 +491,9 @@ class GUI:
         Args:
             event:
         """
-        self.X.set(event.x)
-        self.Y.set(event.y)
-        self.draging = True  # 开始画框的标志
+        self._X.set(event.x)
+        self._Y.set(event.y)
+        self._draging = True  # 开始画框的标志
 
     # 鼠标左键移动，显示选取的区域
     def mouseDrag(self, event):
@@ -501,15 +502,15 @@ class GUI:
         Args:
             event:
         """
-        if not self.draging:
+        if not self._draging:
             return
         try:
             # 删除刚画完的图形，否则鼠标移动的时候是黑乎乎的一片矩形
-            self.canvas.delete(self.lastDragedRectangle)
+            self.canvas.delete(self._lastDragedRectangle)
         except Exception as e:
             pass
-        self.lastDragedRectangle = self.canvas.create_rectangle(self.X.get(), self.Y.get(), event.x, event.y,
-                                                                outline='yellow')
+        self._lastDragedRectangle = self.canvas.create_rectangle(self._X.get(), self._Y.get(), event.x, event.y,
+                                                                 outline='yellow')
 
     # 获取鼠标左键抬起的位置，记录区域
     def mouseUpLeft(self, event):
@@ -521,18 +522,17 @@ class GUI:
         Returns:
 
         """
-        self.draging = False
+        self._draging = False
         try:
-            self.canvas.delete(self.lastDragedRectangle)  # 删除拖拽时画的框
+            self.canvas.delete(self._lastDragedRectangle)  # 删除拖拽时画的框
         except Exception as e:
             pass
         upx = event.x
         upy = event.y
-        myleft, myright = sorted([self.X.get(), upx])
-        mytop, mybottom = sorted([self.Y.get(), upy])
+        myleft, myright = sorted([self._X.get(), upx])
+        mytop, mybottom = sorted([self._Y.get(), upy])
         vehicle = {'left': myleft, 'right': myright, 'top': mytop, 'bottom': mybottom}
-        print("选择区域：xmin:" + str(myleft) + ' ymin:' + str(mytop) + ' xmax:' + str(myright) + ' ymax:' + str(
-            mybottom))  # 对应image中坐标信息
+        print('选择区域：left:%d top:%d right:%d bottom:%d' % (myleft, mytop, myright, mybottom))  # 对应image中坐标信息
         if args.crop_mode is 0:
             inputStr = inputbox('输入车辆车牌号')
             if inputStr is '':
@@ -567,7 +567,7 @@ class GUI:
         for dict in self.boxesAndLabels:
             left, right, top, bottom = dict['left'], dict['right'], dict['top'], dict['bottom']
             saveFullFileName, _ = LPDetector.getInconflictFileName(args.save_folder + dict['label'] + '.jpg')
-            GUI.cutImwrite(saveFullFileName, self.baseFrame, left, right, top, bottom)
+            left, right, top, bottom = GUI.cutImwrite(saveFullFileName, self.baseFrame, left, right, top, bottom)
             if self.isImageDirMode():
                 DbLite.append(self.imageFiles[self.imageFilesIndex], saveFullFileName, left, right, top, bottom)
             elif self.isImageMode():
@@ -585,10 +585,22 @@ class GUI:
             savedFileName: 要保存的图片文件名
             image: 需要被裁减的图片
             left, right, top, bottom: 左，右，上，下坐标。要求：左<右，上<下
-
+        Returns:
+            真实裁剪的left, right, top, bottom（只有出现异常才会与传入的不同）
         """""
+        # 合理化检查并纠正
+        originalPositions = (left, right, top, bottom)
+        imgHeight, imgWidth, _ = image.shape
+        left = left if left >= 0 else 0
+        right = right if right <= imgWidth else imgWidth
+        top = top if top >= 0 else 0
+        bottom = bottom if bottom <= imgHeight else imgHeight
+        if originalPositions != (left, right, top, bottom):
+            print('坐标越界，已纠正为left:%d top:%d right:%d bottom:%d' % (left, top, right, bottom))
+        # 开始裁剪
         clipFrame = image[top:bottom, left:right]
         Transformer.Imwrite(savedFileName, clipFrame)
+        return left, right, top, bottom
     # endregion
 
 
