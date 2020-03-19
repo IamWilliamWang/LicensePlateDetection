@@ -3,5 +3,5 @@
 *train*/
 *val*/
 MTCNN/data_preprocessing/anno_store/
-dataset/LPR_detection/
-log0.txt
+dataset/
+log*.txt

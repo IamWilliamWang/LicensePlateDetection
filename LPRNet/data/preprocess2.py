@@ -23,7 +23,8 @@ def Imwrite(filename_unicode: str, frame) -> None:
     cv2.imencode(extension, frame)[1].tofile(filename_unicode)
 
 
-for root, dirs, files in os.walk(r'E:\PycharmProjects\License_Plate_Detection_Pytorch-master\dataset'):
+targetDir = r'E:\PycharmProjects\License_Plate_Detection_Pytorch-master\dataset'
+for root, dirs, files in os.walk(targetDir):
     for filename in files:
         if filename.endswith('.jpg') is False:
             continue
